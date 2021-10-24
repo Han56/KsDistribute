@@ -1,0 +1,3 @@
+/data/workarea/idea/mapreduce/src/main/java/wordcount/WordCountDriver.java
+/data/workarea/idea/mapreduce/src/main/java/wordcount/WordCountReducer.java
+/data/workarea/idea/mapreduce/src/main/java/wordcount/WordCountMapper.java

@@ -25,10 +25,10 @@ public class HdfsClient {
     @Before
     public void init() throws URISyntaxException,IOException,InterruptedException{
         // 连接集群 nn 地址
-        URI uri = new URI("hdfs://hadoop102:8020");
+        URI uri = new URI("hdfs://hadoop101:8020");
         //创建一个配置文件
         Configuration configuration = new Configuration();
-        configuration.set("dfs.replication","2");
+        configuration.set("dfs.replication","1");
 
         //用户
         String user = "han56";
@@ -119,15 +119,18 @@ public class HdfsClient {
     @Test
     public void getFileDetails() throws IOException {
         //获取所有文件信息
-        RemoteIterator<LocatedFileStatus> listFiles = fileSystem.listFiles(new Path("/"),true);
+        RemoteIterator<LocatedFileStatus> listFiles = fileSystem.listFiles(new Path("/hy_history_data/September/S"),true);
         //遍历文件
+        int sum=0;//计数器
         while (listFiles.hasNext()) {
+            sum++;
+            System.out.println("======输出第"+sum +"个文件信息======");
             LocatedFileStatus f = listFiles.next();
             //获取一些常规信息
-//            System.out.println(f.getPath());
-//            System.out.println(f.getAccessTime());
-//            System.out.println(f.getOwner());
-//            System.out.println(f.getPermission());
+            System.out.println(f.getPath());
+            System.out.println(f.getAccessTime());
+            System.out.println(f.getOwner());
+            System.out.println(f.getPermission());
             //获取块信息
             BlockLocation[] blockLocations = f.getBlockLocations();
             for (BlockLocation flag:blockLocations)
