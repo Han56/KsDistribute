@@ -106,15 +106,9 @@ https://mp.weixin.qq.com/s?__biz=Mzg3OTI1ODkzOQ==&mid=2247485618&idx=1&sn=0ea1df
 
 
 
-### 对齐阶段（第一次MapReduce）
+### 对齐阶段
 
-示意图：
-
-![](/data/files/杂项/研究生阶段/会议文档/第一次MapReduce架构.png)
-
-对齐阶段十分符合MapReduce的处理逻辑。目前所有测试文件都存储在不同的集群节点中。
-
-基于集中式代码的逻辑，将现有程序改为分布式处理。
+基于集中式代码的逻辑，对现有程序进行优化。
 
 ![](/data/files/杂项/研究生阶段/后台程序运行截图/集中式目录结构.png)
 
@@ -126,43 +120,125 @@ https://mp.weixin.qq.com/s?__biz=Mzg3OTI1ODkzOQ==&mid=2247485618&idx=1&sn=0ea1df
 
 
 
-数据预处理：
+**需求分析：**
 
-（1）获取最晚开始的文件位置
-
-![](/data/files/杂项/研究生阶段/后台程序运行截图/获取最晚开始文件流程图.png)
-
-获得的这个文件夹内的文件路径未来将会做 MapReduce 整个阶段的Key值。
-
-程序代码：
+目前有n个文件夹，每个文件夹代表一个波形监控器，各个文件夹中存储的数据即波形数据文件。根据 变量 k 作为阈值来终止回溯，这个变量是手动输入的，需要人工的控制。
 
 
 
-（2）将文件夹内的文件路径 存储在一个 txt 文件下，并用 /t 进行分割，方便MR过程的读取。
+**文件命名形式：**
+
+![](/data/files/杂项/研究生阶段/后台程序运行截图/文件命名解析.png)
+
+Test_没用，后面的是时间信息，比如 190923080744 就代表 19年9月23日8点零七分44秒事件的波形文件。
 
 
 
-
-
-**对齐MR需求分析**
-
-**输入输出：**
-
-Map阶段：
-
-输入数据格式：
+对齐的规则是寻找数组中 其他台站与其相差一个小时的文件。比如S监控器的 190923080744这个时间节点的事件文件，那么就要去找 T U V Y Z目录下的 190923 （07/08/09）44的文件。
 
 
 
-输出：
+要做的工作是要将所有台站中的文件根据文件名进行对齐操作，目前的想法 是将文件名全部进行切割组合并塞进一个Map结构，数据预处理后的形式大致是这样的：
 
-Reduce阶段：
+![](/data/files/杂项/研究生阶段/后台程序运行截图/数据预处理封装成map形式.png)
 
-程序逻辑代码：
+**优化逻辑：**
 
-
-
-执行结果：
+如果k<3||k>n，则不足以计算，直接返回警告信息。
 
 
+
+如果3<=k<=n，则对 Map 基于value进行 升序排序，这时的决策树如下图所示:（以k==n为例）
+
+（紫色方块代表最终塞进res的子结果。红色代表此时穷举到的文件不合法，回溯终止，剪枝操作。其他颜色为每一层的合法选择）
+
+![](/data/files/杂项/研究生阶段/后台程序运行截图/对齐阶段回溯决策树.png)
+
+
+
+这其实就又转换成了一个经典的用回溯算法解决组合问题。
+
+
+
+**算法设计：**
+
+**isValid方法：**（将此时待选择时间与之前的track里面的所有元素比较，判断标准是一小时之内。如果true则继续向下，返回false的话返回backtrack方法后直接break，说明这一次回溯已经没有意义了，及时剪枝，降低复杂度）。
+
+```java
+    public static boolean isValid(LinkedList<String> track,String dateBeforeJudge) throws ParseException {
+        for (String trackStr:track){
+            //对数据进行切割，先看是否在同一天
+            SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyyMMdd");
+            Date trackStrDate = simpleDateFormat.parse(trackStr.substring(0,8));
+            Date dateBeforeJudgeDate = simpleDateFormat.parse(dateBeforeJudge.substring(0,8));
+            if (!trackStrDate.equals(dateBeforeJudgeDate)){
+                System.out.println("不在同一天");
+                return false;
+            }
+            //如果是同一天，则比较时间差是否在一个小时以内
+            /*
+            * 这里之后会封装成一个计算秒级别差值的方法
+            * 这里这样写一定会加快速度，毕竟很多时间都执行不到这一步
+            * 避免每次都要计算时间差
+            * */
+            SimpleDateFormat simpleDateFormat1 = new SimpleDateFormat("yyyyMMddHHmmss");
+            Date trackStrDate1 = simpleDateFormat1.parse(trackStr);
+            Date dateBeforeJudgeDate1 =  simpleDateFormat1.parse(dateBeforeJudge);
+            //时间差
+            int diff = (int)((trackStrDate1.getTime()-dateBeforeJudgeDate1.getTime())/1000);
+            System.out.println("时间差:"+diff);
+            if (Math.abs(diff)>3600){
+                System.out.println("在同一天，但是时间差大于一个小时");
+                return false;
+            }
+        }
+        return true;
+    }
+```
+
+**回溯 backtrack 方法：**
+
+```java
+ /*
+    * 回溯递归方法
+    * */
+    public void backtrack(LinkedList<String> track,Map<Character,List<String>> map,List<Character> panfus,int start,int k) throws ParseException {
+        if (track.size() == k){
+            backTrackRes.add(new LinkedList<>(track));
+            return;
+        }
+        List<String> tmpList = map.get(panfus.get(start));
+        for (String date : tmpList) {
+            /*
+            * 用当前的日期的日期与track中其他日期对比，
+            * 查看是否在同一个小时内
+            * */
+            if (!isValid(track, date))
+                continue;
+            track.add(date);
+            backtrack(track, map, panfus, start + 1,k);
+            track.removeLast();
+        }
+    }
+```
+
+此时的执行效率（4000个文件路径）：
+
+k==n==6：用时 5.58s
+
+![](/data/files/杂项/研究生阶段/后台程序运行截图/k等于6效率.png)
+
+k==5<n：用时4.83s
+
+k==4<n：用时4.47s
+
+k==3<n：用时3.92s
+
+
+
+对齐完成！
+
+
+
+### 将对齐结果存储在HBase中
 
