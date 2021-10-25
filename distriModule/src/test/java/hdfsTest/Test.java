@@ -94,7 +94,7 @@ public class Test {
         //转换为list
         List<Map.Entry<String,Integer>> list = new ArrayList<>(panfuToNumMap.entrySet());
         //使用Collections.sort()排序，按照value排序
-        Collections.sort(list, new Comparator<Map.Entry<String, Integer>>() {
+        list.sort(new Comparator<Map.Entry<String, Integer>>() {
             @Override
             public int compare(Map.Entry<String, Integer> o1, Map.Entry<String, Integer> o2) {
                 //降序 o2 conpareTo o1  升序 o1 compareTo o2
@@ -102,9 +102,9 @@ public class Test {
             }
         });
         //循环输出测试
-        System.out.println("根据value升序排序输出测试");
+//        System.out.println("根据value升序排序输出测试");
         for (Map.Entry<String,Integer> mapResults:list){
-            System.out.println(mapResults.getKey()+":"+mapResults.getValue());
+//            System.out.println(mapResults.getKey()+":"+mapResults.getValue());
             res.add(rootPath+"/"+mapResults.getKey());
         }
         return res;
@@ -148,12 +148,12 @@ public class Test {
         /*
         * 输出测试
         * */
-        for (char panfu:panfus){
+/*        for (char panfu:panfus){
             System.out.println(returnMap.get(panfu));
-        }
+        }*/
         //进入回溯算法处理
         LinkedList<String> track = new LinkedList<>();
-        backtrack(track,returnMap,panfus,0);
+        backtrack(track,returnMap,panfus,0,3);
         //回溯完成 res 结果集存储对齐初步结果
         System.out.println("=====根据文件名对齐结果=====");
         for (List<String> printList:backTrackRes)
@@ -161,31 +161,27 @@ public class Test {
     }
 
     /*
-    * 回溯递归方法1：当台站数等于阈值
+    * 回溯递归方法
     * */
-    public void backtrack(LinkedList<String> track,Map<Character,List<String>> map,List<Character> panfus,int start) throws ParseException {
-        if (track.size() == map.size()){
+    public void backtrack(LinkedList<String> track,Map<Character,List<String>> map,List<Character> panfus,int start,int k) throws ParseException {
+        if (track.size() == k){
             backTrackRes.add(new LinkedList<>(track));
             return;
         }
         List<String> tmpList = map.get(panfus.get(start));
-        int tmpSize = tmpList.size();
-        for (int i=0;i<tmpSize;i++){
-            String date = tmpList.get(i);
-            if (!isValid(track,date))
+        for (String date : tmpList) {
+            /*
+            * 用当前的日期的日期与track中其他日期对比，
+            * 查看是否在同一个小时内
+            * */
+            if (!isValid(track, date))
                 continue;
             track.add(date);
-            backtrack(track, map, panfus, start+1);
+            backtrack(track, map, panfus, start + 1,k);
             track.removeLast();
         }
     }
 
-    /*
-    * 回溯递归方法2：当台站数 大于等于3小于阈值时候
-    * */
-    public void backtrack2(){
-
-    }
 
 
     /*
@@ -243,4 +239,16 @@ public class Test {
         return true;
     }
 
+
+    public static boolean isOverTrackElement(LinkedList<String> track,String dateBeforeJudge) throws ParseException {
+        for (String trackStr:track){
+            SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyyMMdd");
+            Date trackStrDate = simpleDateFormat.parse(trackStr.substring(0,8));
+            Date dateBeforeJudgeDate = simpleDateFormat.parse(dateBeforeJudge.substring(0,8));
+            if (dateBeforeJudgeDate.after(trackStrDate)){
+                return false;
+            }
+        }
+        return true;
+    }
 }
