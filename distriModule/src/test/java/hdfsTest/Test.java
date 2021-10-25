@@ -21,18 +21,6 @@ public class Test {
 
     private static FileSystem fileSystem;
 
-    /*
-    * 预定义文件夹
-    * */
-    //预先定义所有文件夹
-/*    List<String> fileParentPath = new ArrayList<String>(){{
-        add("/hy_history_data/September/S");
-        add("/hy_history_data/September/T");
-        add("/hy_history_data/September/U");
-        add("/hy_history_data/September/V");
-        add("/hy_history_data/September/Y");
-        add("/hy_history_data/September/Z");
-    }};*/
 
     //对齐结果集
     List<List<String>> backTrackRes = new LinkedList<>();
@@ -132,14 +120,11 @@ public class Test {
             RemoteIterator<LocatedFileStatus> listFiles = fileSystem.listFiles
                     (new Path(pathStr),true);
             //遍历文件
-            int sum = 0;
             List<String> resultList = new ArrayList<>();
             while (listFiles.hasNext()){
-                sum++;
-//                System.out.println("======输出第"+ sum +"个文件信息======");
                 LocatedFileStatus f = listFiles.next();
-//                System.out.println("======文件路径:"+f.getPath()+"====");
-                resultList.add("20"+f.getPath().toString().substring(55,67));
+//                System.out.println("======文件路径:"+f.getPath().toString()+"====");
+                resultList.add(f.getPath().toString());
             }
             char panfu = pathStr.charAt(pathStr.length()-1);
             panfus.add(panfu);
@@ -153,7 +138,7 @@ public class Test {
         }*/
         //进入回溯算法处理
         LinkedList<String> track = new LinkedList<>();
-        backtrack(track,returnMap,panfus,0,3);
+        backtrack(track,returnMap,panfus,0,6);
         //回溯完成 res 结果集存储对齐初步结果
         System.out.println("=====根据文件名对齐结果=====");
         for (List<String> printList:backTrackRes)
@@ -171,10 +156,14 @@ public class Test {
         List<String> tmpList = map.get(panfus.get(start));
         for (String date : tmpList) {
             /*
+            * 对date进行切割组装
+            * */
+            String subDate = "20"+date.substring(55,67);
+            /*
             * 用当前的日期的日期与track中其他日期对比，
             * 查看是否在同一个小时内
             * */
-            if (!isValid(track, date))
+            if (!isValid(track, subDate))
                 continue;
             track.add(date);
             backtrack(track, map, panfus, start + 1,k);
@@ -203,19 +192,16 @@ public class Test {
         System.out.println(isValid(testTrack,testDate));
     }
 
-
-
     /*
     * 用于回溯
     * */
     public static boolean isValid(LinkedList<String> track,String dateBeforeJudge) throws ParseException {
         for (String trackStr:track){
-            //对数据进行切割，先看是否在同一天
+            //对数据进行切割，先看是否在同一天  /hy_history_data/September/S/Test_1909223080744.HFMED
             SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyyMMdd");
-            Date trackStrDate = simpleDateFormat.parse(trackStr.substring(0,8));
+            Date trackStrDate = simpleDateFormat.parse("20"+trackStr.substring(55,61));
             Date dateBeforeJudgeDate = simpleDateFormat.parse(dateBeforeJudge.substring(0,8));
             if (!trackStrDate.equals(dateBeforeJudgeDate)){
-                //System.out.println("不再同一天");
                 return false;
             }
             //如果是同一天，则比较时间差是否在一个小时以内
@@ -225,7 +211,7 @@ public class Test {
             * 避免每次都要计算时间差
             * */
             SimpleDateFormat simpleDateFormat1 = new SimpleDateFormat("yyyyMMddHHmmss");
-            Date trackStrDate1 = simpleDateFormat1.parse(trackStr);
+            Date trackStrDate1 = simpleDateFormat1.parse("20"+trackStr.substring(55,67));
             Date dateBeforeJudgeDate1 =  simpleDateFormat1.parse(dateBeforeJudge);
             //时间差
             int diff = Math.abs((int)((trackStrDate1.getTime()-dateBeforeJudgeDate1.getTime())/1000));
