@@ -5,6 +5,7 @@ import org.apache.hadoop.fs.*;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import read.utils.LocalFileUtils;
 
 import java.io.IOException;
 import java.net.URI;
@@ -24,6 +25,9 @@ public class AlignFilePath {
 
     //对齐结果集
     List<List<String>> backTrackRes = new LinkedList<>();
+
+    //对齐列表 index 组合结果集
+    List<List<Integer>> pathIndexRes = new LinkedList<>();
 
     @Before
     public void init() throws URISyntaxException, IOException,InterruptedException{
@@ -99,15 +103,12 @@ public class AlignFilePath {
     * */
     @Test
     public void formatFilePath() throws IOException, ParseException {
-        //结果集
-        Map<Character,List<String>> returnMap = new HashMap<>();
-        //存储盘符
-        List<Character> panfus = new ArrayList<>();
         /*
          * 优化后：文件夹列表按照文件数大小升序排序
          * */
         List<String> fileParentPath = sortShortestFilePath("/hy_history_data/September");
-        //设置排序阈值
+
+        List<List<String>> filePathSet = new ArrayList<>();
 
         //获取所有文件信息
         for (String pathStr:fileParentPath){
@@ -121,60 +122,92 @@ public class AlignFilePath {
 //                System.out.println("======文件路径:"+f.getPath().toString()+"====");
                 resultList.add(f.getPath().toString());
             }
-            char panfu = pathStr.charAt(pathStr.length()-1);
-            panfus.add(panfu);
-            returnMap.put(panfu,resultList);
+            filePathSet.add(resultList);
         }
+
         /*
-         * 输出测试
+         * 第一次回溯：将路径index进行组合
          * */
-/*        for (char panfu:panfus){
-            System.out.println(returnMap.get(panfu));
-        }*/
-        //进入回溯算法处理
+        AlignFilePath alignFilePath = new AlignFilePath();
+        List<List<Integer>> combinIndexList = alignFilePath.combineListIndex(filePathSet.size(),5);
+        System.out.println("====所有路径索引集合====");
+        for (List<Integer> integers:combinIndexList)
+            System.out.println(integers);
+        System.out.println("====完毕====");
+        //进入第二次回溯算法处理
         LinkedList<String> track = new LinkedList<>();
-        backtrack(track,returnMap,panfus,0,6);
-        //回溯完成 res 结果集存储对齐初步结果
-        System.out.println("=====根据文件名对齐结果=====");
-        for (List<String> printList:backTrackRes)
-            System.out.println(printList);
+        for (List<Integer> path:combinIndexList)
+            backtrack(path,track,filePathSet,0);
+        System.out.println("===对齐结果===");
+        for (List<String> testOut:backTrackRes)
+            System.out.println(testOut);
+        System.out.println("===完毕===");
+        System.out.println("====结果一共"+backTrackRes.size()+"个====");
+        System.out.println("====对结果进行存储====");
+        LocalFileUtils localFileUtils = new LocalFileUtils();
+        localFileUtils.alignResToFileToSave(backTrackRes,5);
     }
 
     /*
-     * 回溯递归方法
+     * 对list index进行回溯组合
      * */
-    public void backtrack(LinkedList<String> track,Map<Character,List<String>> map,List<Character> panfus,int start,int k) throws ParseException {
-        if (track.size() == k){
-            backTrackRes.add(new LinkedList<>(track));
+    public List<List<Integer>> combineListIndex(int n,int k){
+        if (k<3||n<0)
+            return pathIndexRes;
+        LinkedList<Integer> track = new LinkedList<>();
+        pathIndexBackTrack(n,k,0,track);
+        return pathIndexRes;
+    }
+
+    public void pathIndexBackTrack(int n,int k,int start,LinkedList<Integer> track){
+        if (k == track.size()){
+            pathIndexRes.add(new LinkedList<>(track));
             return;
         }
-        List<String> tmpList = map.get(panfus.get(start));
-        for (String date : tmpList) {
-            /*
-             * 对date进行切割组装
-             * */
-            String subDate = "20"+date.substring(55,67);
-            /*
-             * 用当前的日期的日期与track中其他日期对比，
-             * 查看是否在同一个小时内
-             * */
-            if (!isValid(track, subDate))
-                continue;
-            track.add(date);
-            backtrack(track, map, panfus, start + 1,k);
+        for (int i=start;i<n;i++){
+            track.add(i);
+            pathIndexBackTrack(n, k, i+1, track);
             track.removeLast();
         }
     }
 
     /*
-     * 用于回溯的判断
+     * 第二次回溯递归方法
+     * */
+    public void backtrack(List<Integer> pathIndexList,LinkedList<String> track,List<List<String>> allPathList,int start) throws ParseException {
+        if (track.size()==pathIndexList.size()){
+            backTrackRes.add(new LinkedList<>(track));
+            return;
+        }
+        if (start==pathIndexList.size())
+            return;
+        int index=pathIndexList.get(start);
+        List<String> temp= allPathList.get(index);
+        Collections.sort(temp);
+        for (String i:temp){
+            if (!isOverTrackElement(track,i))
+                return;
+            if (!isValid(track,i))
+                continue;
+            track.add(i);
+            backtrack(pathIndexList, track, allPathList, start+1);
+            track.removeLast();
+        }
+    }
+
+    /*
+     * 用于回溯
      * */
     public static boolean isValid(LinkedList<String> track,String dateBeforeJudge) throws ParseException {
+        if (track.contains(dateBeforeJudge))
+            return false;
+        if (dateBeforeJudge==null)
+            return false;
         for (String trackStr:track){
             //对数据进行切割，先看是否在同一天  /hy_history_data/September/S/Test_1909223080744.HFMED
             SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyyMMdd");
             Date trackStrDate = simpleDateFormat.parse("20"+trackStr.substring(55,61));
-            Date dateBeforeJudgeDate = simpleDateFormat.parse(dateBeforeJudge.substring(0,8));
+            Date dateBeforeJudgeDate = simpleDateFormat.parse("20"+dateBeforeJudge.substring(55,61));
             if (!trackStrDate.equals(dateBeforeJudgeDate)){
                 return false;
             }
@@ -186,7 +219,7 @@ public class AlignFilePath {
              * */
             SimpleDateFormat simpleDateFormat1 = new SimpleDateFormat("yyyyMMddHHmmss");
             Date trackStrDate1 = simpleDateFormat1.parse("20"+trackStr.substring(55,67));
-            Date dateBeforeJudgeDate1 =  simpleDateFormat1.parse(dateBeforeJudge);
+            Date dateBeforeJudgeDate1 =  simpleDateFormat1.parse("20"+dateBeforeJudge.substring(55,67));
             //时间差
             int diff = Math.abs((int)((trackStrDate1.getTime()-dateBeforeJudgeDate1.getTime())/1000));
             //System.out.println("时间差:"+diff);
@@ -196,6 +229,19 @@ public class AlignFilePath {
             }
         }
         //System.out.println("成功");
+        return true;
+    }
+
+
+    public static boolean isOverTrackElement(LinkedList<String> track,String dateBeforeJudge) throws ParseException {
+        for (String trackStr:track){
+            SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyyMMdd");
+            Date trackStrDate = simpleDateFormat.parse("20"+trackStr.substring(55,61));
+            Date dateBeforeJudgeDate = simpleDateFormat.parse("20"+dateBeforeJudge.substring(55,61));
+            if (dateBeforeJudgeDate.after(trackStrDate)){
+                return false;
+            }
+        }
         return true;
     }
 

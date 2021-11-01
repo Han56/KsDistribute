@@ -4,6 +4,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.*;
 import org.junit.After;
 import org.junit.Before;
+import read.utils.LocalFileUtils;
 
 import java.io.IOException;
 import java.net.URI;
@@ -130,18 +131,12 @@ public class Test {
             }
             filePathSet.add(resultList);
         }
-        /*
-        * 输出测试
-        * */
-/*        for (char panfu:panfus){
-            System.out.println(returnMap.get(panfu));
-        }*/
 
         /*
         * 第一次回溯：将路径index进行组合
         * */
         Test test = new Test();
-        List<List<Integer>> combinIndexList = test.combineListIndex(filePathSet.size(),6);
+        List<List<Integer>> combinIndexList = test.combineListIndex(filePathSet.size(),5);
         System.out.println("====所有路径索引集合====");
         for (List<Integer> integers:combinIndexList)
             System.out.println(integers);
@@ -154,6 +149,10 @@ public class Test {
         for (List<String> testOut:res)
             System.out.println(testOut);
         System.out.println("===完毕===");
+        System.out.println("====结果一共"+res.size()+"个====");
+        System.out.println("====对结果进行存储====");
+        LocalFileUtils localFileUtils = new LocalFileUtils();
+        localFileUtils.alignResToFileToSave(res,5);
     }
 
     /*
