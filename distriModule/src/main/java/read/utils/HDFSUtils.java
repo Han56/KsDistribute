@@ -2,14 +2,19 @@ package read.utils;
 
 import com.alibaba.fastjson.JSON;
 import entity.HFMEDHead;
+import entity.SensorProperties;
 import net.minidev.json.JSONUtil;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.*;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import read.Parameters;
 
+import java.io.ByteArrayInputStream;
+import java.io.DataInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 
@@ -44,6 +49,7 @@ public class HDFSUtils {
     * 读取文件方法
     * */
     public HFMEDHead readHFileHead(String pathStr) throws IOException {
+
         Path path = new Path(pathStr);
 
         //open file
@@ -145,6 +151,90 @@ public class HDFSUtils {
         hfmedHead.setUserIdName(userIdName);
         return hfmedHead;
     }
+
+
+    public String readDateSegmentHead() throws IOException {
+
+        byte[] dataSegmentHeadByte = new byte[34];
+
+        HFMEDHead hfmedHead = new HDFSUtils().readHFileHead("hdfs://hadoop101:8020/hy_history_data/September/S/Test_190925110520.HFMED");
+
+        if (hfmedHead.getChannelOnNum()==7){
+            Parameters.WenJianTou = 284;
+            Parameters.TongDaoDiagnose = 1;
+        }else if (hfmedHead.getChannelOnNum()==4){
+            Parameters.WenJianTou = 242;
+            Parameters.TongDaoDiagnose = 0;
+        }else {
+            System.out.println("通道数数值错误，无法执行");
+            return null;
+        }
+        FSDataInputStream fsDataInputStream = fileSystem.open(new Path("hdfs://hadoop101:8020/hy_history_data/September/S/Test_190925110520.HFMED"));
+
+        long skipByte = fsDataInputStream.skip(Parameters.WenJianTou);
+        int readLength = fsDataInputStream.read(dataSegmentHeadByte);
+
+        System.out.println("跳过字节数:"+skipByte);
+        System.out.println("读取字节数:"+readLength);
+
+        byte[] segmentDate = FindByte.searchByteSeq(dataSegmentHeadByte,8,17);
+        String startDate = "20" + segmentDate[0] + "-" +
+                segmentDate[1]+"-"+segmentDate[2]+" "+segmentDate[3]+":"+segmentDate[4]+":"+segmentDate[5];
+        System.out.println("切割文件头部日期:"+startDate);
+        return startDate;
+    }
+
+
+
+    public SensorProperties[] readSensorProperties(String fileName) throws IOException {
+        /*
+         * 声明7个Sensorproperties指针，这时候并没有为之分配空间 用于将下面求出的个字段封装起来
+         */
+        SensorProperties[] sensorProperties = new SensorProperties[7];
+
+        //为上面的每个引用分配空间
+        for (int i=0;i<7;i++)
+            sensorProperties[i] = new SensorProperties();
+        //存放头文件字节数组
+        byte[] fileHeadByte = new byte[186];
+
+        // 存放通道信息
+        byte[][] sensorArray = new byte[8][14];
+
+        FSDataInputStream fsDataInputStream = fileSystem.open(new Path(fileName));
+
+        // 将读到的头文件放入到字符数组缓冲区中
+        int readLength = fsDataInputStream.read(fileHeadByte);
+
+        // 将读到的通道信息放到二维的数组中
+        for (int i=0;i<7;i++){
+            int byteArrayLength = fsDataInputStream.read(sensorArray[i]);
+            //获取字节序列
+            byte[] chNoByte = FindByte.searchByteSeq(sensorArray[i], 0, 1);
+            byte[] chNameByte = FindByte.searchByteSeq(sensorArray[i], 2, 5);
+            byte[] chUnitByte = FindByte.searchByteSeq(sensorArray[i], 6, 9);
+            byte[] chCaliByte = FindByte.searchByteSeq(sensorArray[i], 10, 13);
+            byte[] tempFloat ={chCaliByte[3] ,chCaliByte[2] ,chCaliByte[1] ,chCaliByte[0]} ;
+
+            //解析字符序列
+            short chNo = Byte2OtherDataFormat.byte2Short(chNoByte);
+            String chName = Byte2OtherDataFormat.byte2String(chNameByte);
+            String chUnit = Byte2OtherDataFormat.byte2String(chUnitByte);
+            DataInputStream dis = new DataInputStream(new ByteArrayInputStream(tempFloat));
+            float fchCali = dis.readFloat();
+            dis.close();
+
+            sensorProperties[i].setChName(chName);
+            sensorProperties[i].setChNo(chNo);
+            sensorProperties[i].setChUnit(chUnit);
+            sensorProperties[i].setChCali(fchCali);
+
+        }
+
+        return sensorProperties;
+
+    }
+
 
     @Test
     public void testReadHFHead() throws IOException {

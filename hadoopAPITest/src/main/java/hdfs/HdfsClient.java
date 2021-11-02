@@ -2,6 +2,7 @@ package hdfs;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.*;
+import org.apache.hadoop.io.IOUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -9,6 +10,8 @@ import org.junit.Test;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * @author han56
@@ -28,7 +31,7 @@ public class HdfsClient {
         URI uri = new URI("hdfs://hadoop101:8020");
         //创建一个配置文件
         Configuration configuration = new Configuration();
-        configuration.set("dfs.replication","1");
+        configuration.set("dfs.replication","3");
 
         //用户
         String user = "han56";
@@ -60,13 +63,21 @@ public class HdfsClient {
      * */
     @Test
     public void testCopyFromLocalFile() throws IOException,URISyntaxException,InterruptedException{
+
+        List<String> pathList = new ArrayList<String>(){{
+            add("/home/han56/hadoop_input/alignRes/4AlgrithmAlginRes.txt");
+            add("/home/han56/hadoop_input/alignRes/5AlgrithmAlginRes.txt");
+            add("/home/han56/hadoop_input/alignRes/6AlgrithmAlginRes.txt");
+        }};
         /*
          * 参数一：上传完成是否删除源文件  参数二：是否重写文件
          * 参数三：源文件路径  参数四：hdfs文件路径
          * */
-        fileSystem.copyFromLocalFile(false,false,
-                new Path("/data/hdfs_local/sunwukong.txt"),
-                new Path("hdfs://hadoop102/xiyou/huaguoshan"));
+        for (String pathStr:pathList)
+            fileSystem.copyFromLocalFile(false,false,
+                    new Path(pathStr),
+                    new Path("hdfs://hadoop101:8020//hy_history_data/algin_group"));
+        System.out.println("文件上传成功");
     }
 
     /*
@@ -80,6 +91,27 @@ public class HdfsClient {
          * */
         fileSystem.copyToLocalFile(false, new Path("hdfs://hadoop102/xiyou/huaguoshan/hy.dxf"),
                 new Path("/home/han56"), true);
+    }
+
+
+    /*
+    * 读文件测试
+    * */
+    @Test
+    public void testReadFile() throws IOException{
+        Path readPath = new Path("hdfs://hadoop101:8020/hy_history_data/September/S/Test_190925110520.HFMED");
+
+        //open file
+        FSDataInputStream inputStream = fileSystem.open(readPath);
+
+        try {
+            IOUtils.copyBytes(inputStream,System.out,4096,false);
+        }catch (Exception e){
+            e.printStackTrace();
+        }finally {
+            //close Stream
+            IOUtils.closeStream(inputStream);
+        }
     }
 
     /*
