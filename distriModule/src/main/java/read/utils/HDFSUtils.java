@@ -1,18 +1,17 @@
 package read.utils;
 
+import com.alibaba.fastjson.JSON;
+import entity.HFMEDHead;
+import net.minidev.json.JSONUtil;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocatedFileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RemoteIterator;
+import org.apache.hadoop.fs.*;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 /**
  * @author han56
@@ -20,23 +19,11 @@ import java.util.Map;
  * @create 2021/10/19 上午11:02
  */
 public class HDFSUtils {
-
     private static FileSystem fileSystem;
-    //预先定义所有文件夹
-    List<String> fileParentPath = new ArrayList<String>(){{
-        add("/hy_history_data/September/S");
-        add("/hy_history_data/September/T");
-        add("/hy_history_data/September/U");
-        add("/hy_history_data/September/V");
-        add("/hy_history_data/September/Y");
-        add("/hy_history_data/September/Z");
-    }};
 
-    /*
-    * hdfs客户端连接初始化操作
-    * */
-    public static void hdfsInit() throws IOException, InterruptedException, URISyntaxException {
-        //连接集群nameNode地址
+    @Before
+    public void init() throws URISyntaxException,IOException,InterruptedException{
+        // 连接集群 nn 地址
         URI uri = new URI("hdfs://hadoop101:8020");
         //创建一个配置文件
         Configuration configuration = new Configuration();
@@ -48,84 +35,123 @@ public class HDFSUtils {
         fileSystem = FileSystem.get(uri,configuration,user);
     }
 
-    /*
-    * hdfs结束操作
-    * */
-    public static void hdfsClose() throws IOException{
+    @After
+    public void close() throws IOException{
         fileSystem.close();
     }
 
     /*
-    * 获取每个文件夹的文件名，并进行封装
+    * 读取文件方法
     * */
-    public Map<Character, List<String>> formatFilePathSet() throws IOException, URISyntaxException, InterruptedException {
+    public HFMEDHead readHFileHead(String pathStr) throws IOException {
+        Path path = new Path(pathStr);
 
-        hdfsInit();
+        //open file
+        FSDataInputStream fsDataInputStream = fileSystem.open(path);
 
-        //结果集
-        Map<Character,List<String>> returnMap = new HashMap<>();
+        byte[] tempByte = new byte[186];
 
-        //获取所有文件信息
-        for (String pathStr:fileParentPath){
-            System.out.println("=====当前盘符："+pathStr.charAt(pathStr.length()-1)+"=====");
-            RemoteIterator<LocatedFileStatus> listFiles = fileSystem.listFiles
-                    (new Path(pathStr),true);
-            //遍历文件
-            int sum = 0;
-            List<String> resultList = new ArrayList<>();
-            while (listFiles.hasNext()){
-                sum++;
-                System.out.println("======输出第"+sum +"个文件信息======");
-                LocatedFileStatus f = listFiles.next();
-                System.out.println("======文件路径:"+f.getPath()+"====");
-                resultList.add(f.getPath().toString());
-            }
-            returnMap.put(pathStr.charAt(pathStr.length()-1),resultList);
-        }
-        hdfsClose();
-        return returnMap;
+        int byteLenght = fsDataInputStream.read(tempByte);
+
+//        System.out.println(new String(temByte,0,byteLenght));
+        /*
+        * 数据赋值
+        * */
+        byte[] fileHeadLengthByte = FindByte.searchByteSeq(tempByte,0,1);
+        byte[] formatVerByte = FindByte.searchByteSeq(tempByte, 2, 5) ;
+
+        byte[] dataFileNameByte = FindByte.searchByteSeq(tempByte, 6, 85) ;
+
+        byte[] operatorNameByte = FindByte.searchByteSeq(tempByte, 86, 95) ;
+
+        byte[] palaceNameByte = FindByte.searchByteSeq(tempByte, 96, 115) ;
+
+        byte[] startDateByte = FindByte.searchByteSeq(tempByte, 116, 125) ;
+
+        byte[] sysCounterByte = FindByte.searchByteSeq(tempByte, 126, 133) ;
+
+        byte[] sysFeqByte = FindByte.searchByteSeq(tempByte, 134, 141) ;
+
+        byte[] uesrIdNameByte = FindByte.searchByteSeq(tempByte, 142, 149) ;
+
+        byte[] adFedByte = FindByte.searchByteSeq(tempByte, 150, 153) ;
+
+        byte[] resolutionByte = FindByte.searchByteSeq(tempByte, 154, 155) ;
+
+        byte[] fileDurationByte = FindByte.searchByteSeq(tempByte, 156, 159) ;
+
+        byte[] segmentNumByte = FindByte.searchByteSeq(tempByte, 160, 163) ;
+
+        byte[] segmentHeadLengthByte = FindByte.searchByteSeq(tempByte, 164, 165) ;
+
+        byte[] indexSegmentHeadLenghtByte = FindByte.searchByteSeq(tempByte, 166, 167) ;
+
+        byte[] segmentRecNumByte = FindByte.searchByteSeq(tempByte, 168, 171) ;
+
+        byte[] segmentDurationByte = FindByte.searchByteSeq(tempByte, 172, 175) ;
+
+        byte[] featureCodeByte = FindByte.searchByteSeq(tempByte, 176, 179) ;
+
+        byte[] channelOnNumByte = FindByte.searchByteSeq(tempByte, 180, 181) ;
+
+        byte[] reserveByte = FindByte.searchByteSeq(tempByte, 182, 185) ;
+
+        /*
+        * 数据转换
+        * */
+        short fileHeadLength = Byte2OtherDataFormat.byte2Short(fileHeadLengthByte);
+        String formatVer = Byte2OtherDataFormat.byte2String(formatVerByte);
+        String dataFileName = Byte2OtherDataFormat.byte2String(dataFileNameByte);
+        String operator = Byte2OtherDataFormat.byte2String(operatorNameByte);
+        String palaceName = Byte2OtherDataFormat.byte2String(palaceNameByte);
+
+        /*
+        * 时间数据转换为String类型
+        * */
+        String startDate = Byte2OtherDataFormat.byte2String(startDateByte);
+        String sysCounter = Byte2OtherDataFormat.byte2String(sysCounterByte);
+        String sysFeq = Byte2OtherDataFormat.byte2String(sysFeqByte);
+
+        /*
+        * 其他数据转换
+        * */
+        String userIdName = Byte2OtherDataFormat.byte2String(uesrIdNameByte);
+        int adFre = Byte2OtherDataFormat.byte2Int(adFedByte);
+        short resolution = Byte2OtherDataFormat.byte2Short(resolutionByte);
+        int segmentNum = Byte2OtherDataFormat.byte2Int(segmentNumByte);
+        short segmentHeadLength = Byte2OtherDataFormat.byte2Short(segmentHeadLengthByte);
+        short indexSegmentHeadLength = Byte2OtherDataFormat.byte2Short(indexSegmentHeadLenghtByte);
+        int segmentRecNum = Byte2OtherDataFormat.byte2Int(segmentRecNumByte);
+        String featureCode = Byte2OtherDataFormat.byte2String(featureCodeByte);
+        short channelOnNum = Byte2OtherDataFormat.byte2Short(channelOnNumByte);
+
+        /*
+        * set bean 对象
+        * */
+        HFMEDHead hfmedHead = new HFMEDHead();
+        hfmedHead.setAdFre(adFre);
+        hfmedHead.setChannelOnNum(channelOnNum);
+        hfmedHead.setDataFileName(dataFileName);
+        hfmedHead.setFeatureCode(featureCode);
+        hfmedHead.setFileHeadLength(fileHeadLength);
+        hfmedHead.setFormatVer(formatVer);
+        hfmedHead.setIndexSegmentHeadLength(indexSegmentHeadLength);
+        hfmedHead.setOperator(operator);
+        hfmedHead.setPalaceName(palaceName);
+        hfmedHead.setResolution(resolution);
+        hfmedHead.setSegmentHeadLength(segmentHeadLength);
+        hfmedHead.setSegmentRecNum(segmentRecNum);
+        hfmedHead.setSegmentNum(segmentNum);
+        hfmedHead.setUserIdName(userIdName);
+        return hfmedHead;
     }
 
-    /*
-    * 获取所有文件夹下最晚开始的文件名称
-    * */
-    public List<Map<Character,String>> getTheLastestFilePath() throws IOException, URISyntaxException, InterruptedException {
-        hdfsInit();
-
-        List<Map<Character,String>> lists = new ArrayList<>();
-        //获取各个文件夹下的第一个文件
-        for (String pathStr:fileParentPath){
-            System.out.println("=====当前盘符："+pathStr.charAt(pathStr.length()-1)+"=====");
-            RemoteIterator<LocatedFileStatus> listFiles = fileSystem.listFiles(
-                    new Path(pathStr),true);
-            Map<Character,String> listMap = new HashMap<>();
-            System.out.println("the lastet filePath:"+listFiles.next().getPath().toString());
-            listMap.put(pathStr.charAt(pathStr.length()-1)
-                    ,listFiles.next().getPath().toString());
-            lists.add(listMap);
-        }
-
-        hdfsClose();
-        return lists;
-    }
-
-    public static void main(String[] args) throws IOException, URISyntaxException, InterruptedException {
+    @Test
+    public void testReadHFHead() throws IOException {
+        String pathStr = "hdfs://hadoop101:8020/hy_history_data/September/S/Test_190925110520.HFMED";
         HDFSUtils utils = new HDFSUtils();
-        /*
-        * 遍历所有文件测试
-        * */
-        /*Map<Character,List<String>> testMap = utils.formatFilePathSet();
-        List<String> testList = testMap.get('S');
-        for (String testStr:testList)
-            System.out.println(testStr);*/
-
-        /*
-        * 【测试】获取文件夹下第一个文件
-        * */
-        List<Map<Character,String>> testLists = utils.getTheLastestFilePath();
-        System.out.println("测试结果集：");
-        System.out.println(testLists);
+        HFMEDHead hfmedHead = utils.readHFileHead(pathStr);
+        System.out.println(JSON.toJSONString(hfmedHead));
     }
-
 
 }
