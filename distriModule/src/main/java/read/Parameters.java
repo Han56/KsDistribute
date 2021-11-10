@@ -192,8 +192,8 @@ public class Parameters {
      * 这个顺序必须与启动时的传感器序号顺序一致，这个值不能使用，因为背景噪声的方差波动太频繁，需要频繁的更新背景噪声的方差。
      * 我们不再实时的计算持续时间与持续时间震级。
      */
-    public static final double backGround[] ={29.0,17.0,12.5,5.6,0};
-    public static final double backGroundVariance[] = {};
+    public static final double[] backGround ={29.0,17.0,12.5,5.6,0};
+    public static final double[] backGroundVariance = {};
 
     /**
      * 通道数量跳过字节设置，在旧设备上使用

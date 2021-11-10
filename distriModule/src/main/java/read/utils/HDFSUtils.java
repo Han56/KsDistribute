@@ -3,7 +3,6 @@ package read.utils;
 import com.alibaba.fastjson.JSON;
 import entity.HFMEDHead;
 import entity.SensorProperties;
-import net.minidev.json.JSONUtil;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.*;
 import org.junit.After;
@@ -14,7 +13,6 @@ import read.Parameters;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 
