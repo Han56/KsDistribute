@@ -106,7 +106,7 @@ https://mp.weixin.qq.com/s?__biz=Mzg3OTI1ODkzOQ==&mid=2247485618&idx=1&sn=0ea1df
 
 
 
-### 对齐阶段
+### 第一次对齐阶段
 
 基于集中式代码的逻辑，对现有程序进行优化。
 
@@ -276,11 +276,176 @@ unity 包中全部都是 bean 对象。对各种文件内容的数据模型定�
 
 其次，将util中的Byte2...类 改为 Byte2OtherFormatData类，并将原本的类简化成方法在一个类中保存。
 
-最后，将ReadDateFromHead、ReadHfmedHead、ReadSensorProperties三个类进行精简，合并成一个类，且功能合并为具体的方法等待后续的使用。
+
+
+最后，将ReadDateFromHead、ReadHfmedHead、ReadSensorProperties三个类中的方法放在了接口中，接口即方法的集合，在HDFSUtil类中实现接口并重载实现具体的逻辑代码。
+
+
 
 其中，这里原来的问题不仅仅在模块管理混乱，而且譬如上述所说的三个类，功能严重重叠，几乎每个类都要进行一次IO操作重复读头文件数据。这样做的弊端不仅在多次IO上，且申请了众多缓冲区也会导致虚拟机认为该区域为热点区域，导致不会被释放。
 
 所以，对此进行了优化，使其仅读取了一次，然后对数据进行封装。且使用了 hdfs 提供的API进行读取。它的好处在于比Java的内置类更加轻便，撇出了一些繁重的内容。
+
+#### 读取文件接口
+
+读取文件流程图：
+
+![](/data/files/杂项/研究生阶段/后台程序运行截图/单文件读取测试流程图.png)
+
+文件内部对齐过程：
+
+对第一组测试数据特征进行分析
+
+|  文件夹  |    S     |    Z     |    U     |    V     |    Y     |    T     |
+| :------: | :------: | :------: | :------: | :------: | :------: | :------: |
+| 开始时间 | 11:05:20 | 10:37:45 | 10:59:15 | 10:09:49 | 10:16:50 | 10:45:06 |
+| 结束时间 | 12:05:20 | 11:37:45 | 11:59:15 | 11:09:49 | 11:16:50 | 11:45:06 |
+
+内部对齐示意图：
+
+![](/data/files/杂项/研究生阶段/后台程序运行截图/文件内部对齐示意图.png)
+
+由示意图可知：
+
+有效时间段的始末时间戳由源数据的两个值决定
+
+（1）源数据最大时间戳  例：11:15:20——作为有效时间段的起始时间戳
+
+（2） 源数据最小时间戳 例：10:09:49——+1h做有效数据的结束时间戳
+
+这里的分析可以作为读取数据跳字节的参数来源。
+
+
+
+待分析的源程序代码：这些代码主要看懂其逻辑，代码直接重写。
+
+*this.setting()*
+
+```java
+	/**
+	 * 通过通道数量设置跳过字节数以及通道判断标志位。
+	 */
+	private void settings(HfmedHead hfmedHead) {
+		this.segmentNum = hfmedHead.getSegmentNum();// 从文件头中获得段的数量
+		this.segmentRecNum = hfmedHead.getSegmentRecNum();// 获得每个段的数据条目数
+		this.channelNum = hfmedHead.getChannelOnNum();
+
+		if (channelNum == 7) {
+			this.channel = 123456;
+			this.datahead = 20;
+			this.bytenum = 14;
+			this.voltstart = 12;
+			this.voltend = 13;
+			this.manager.mix_flag1 = true;
+		} else if (channelNum == 4) {
+			this.channel = 456;
+			this.datahead = 26;
+			this.bytenum = 8;
+			this.voltstart = 6;
+			this.voltend = 7;
+			this.manager.mix_flag2 = true;
+		}
+
+		// 混合状态下不判断通道溢出。
+		if (manager.mix_flag1 && manager.mix_flag2) {
+			Parameters.TongDaoDiagnose = 0;
+		}
+	}
+```
+
+*this.getDataElementFromDataBytes()*
+
+```java
+	/**
+	 * 注意：dataBytes的字节数（下标），以及通道是哪几个，若123通道则必须放在x1，y1，z1中，456通道放在x2，y2，z2中。
+	 * 马老师仪器由于更改了6通道，双量程，因此使用channel=123456条件进入。
+	 */
+	@SuppressWarnings("unused")
+	private DataElement getDataElementFromDataBytes() {
+		DataElement dataElement = new DataElement();
+
+		if (channel == 456) {
+			if (manager.isMrMa[sensorID] == true) {
+				short x2 = readsan[0];
+				short y2 = readsan[1];
+				short z2 = readsan[2];
+				dataElement.setX2(x2);
+				dataElement.setY2(y2);
+				dataElement.setZ2(z2);
+			} else {
+				short x2 = Byte2Short.byte2Short(dataByte[0], dataByte[1]);
+				short y2 = Byte2Short.byte2Short(dataByte[2], dataByte[3]);
+				short z2 = Byte2Short.byte2Short(dataByte[4], dataByte[5]);
+
+				dataElement.setX2(x2);
+				dataElement.setY2(y2);
+				dataElement.setZ2(z2);
+			}
+		}
+		if (channel == 123) {
+			short x1 = Byte2Short.byte2Short(dataByte[0], dataByte[1]);
+			short y1 = Byte2Short.byte2Short(dataByte[2], dataByte[3]);
+			short z1 = Byte2Short.byte2Short(dataByte[4], dataByte[5]);
+
+			dataElement.setX1(x1);
+			dataElement.setY1(y1);
+			dataElement.setZ1(z1);
+		}
+		if (channel == 123456) {
+			if (manager.isMrMa[sensorID] == true) {
+				short x1 = Byte2Short.byte2Short(readsan[0], readsan[1]);
+				short y1 = Byte2Short.byte2Short(readsan[2], readsan[3]);
+				short z1 = Byte2Short.byte2Short(readsan[4], readsan[5]);
+				short x2 = Byte2Short.byte2Short(readsan[6], readsan[7]);
+				short y2 = Byte2Short.byte2Short(readsan[8], readsan[9]);
+				short z2 = Byte2Short.byte2Short(readsan[10], readsan[11]);
+				dataElement.setX1(x1);
+				;
+				dataElement.setY1(y1);
+				dataElement.setZ1(z1);
+				dataElement.setX2(x2);
+				dataElement.setY2(y2);
+				dataElement.setZ2(z2);
+			} else {
+				short x1 = Byte2Short.byte2Short(dataByte[0], dataByte[1]);
+				short y1 = Byte2Short.byte2Short(dataByte[2], dataByte[3]);
+				short z1 = Byte2Short.byte2Short(dataByte[4], dataByte[5]);
+				short x2 = Byte2Short.byte2Short(dataByte[6], dataByte[7]);
+				short y2 = Byte2Short.byte2Short(dataByte[8], dataByte[9]);
+				short z2 = Byte2Short.byte2Short(dataByte[10], dataByte[11]);
+
+				dataElement.setX1(x1);
+				dataElement.setY1(y1);
+				dataElement.setZ1(z1);
+
+				dataElement.setX2(x2);
+				dataElement.setY2(y2);
+				dataElement.setZ2(z2);
+			}
+		}
+		return dataElement;
+	}
+```
+
+以下是一些异常问题的善后操作，应该设立一个异常处理接口，将这些方法进行集中，而不是直接写在一个类中，导致实体类不像实体类，服务层不像服务层。
+
+#### 异常处理接口
+
+*this.formerDate()*
+
+```java
+	/**
+	 * 刘老师仪器使用。 时间的规整函数，当GPS压力位出现跳秒时，我们进行时间+1秒操作。
+	 */
+	public String formerDate() {
+		Calendar calendar = Calendar.getInstance(); // 内存溢出的出错位置
+		calendar.setTime(this.date);
+		calendar.add(Calendar.SECOND, timeCount);
+		Date startDate1 = calendar.getTime();
+		SimpleDateFormat format2 = new SimpleDateFormat("yyyy-MM-ddHH:mm:ss");
+		return format2.format(startDate1);
+	}
+```
 
 
 
@@ -312,5 +477,5 @@ Flink不仅能够在实时处理上进行应用，在处理离线的问题上同
 
 **有界数据流：**有界数据流有明确定义的开始和结束，可以在执行 任何计算之前通过获取所有数据来处理有界流，处理有界流不需要有序读取。目前我们的离线数据读取和计算工作就满足这一条件 。所以最终选择flink作为计算模块的核心框架。
 
-
+ 
 

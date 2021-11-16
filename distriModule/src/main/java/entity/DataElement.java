@@ -26,13 +26,6 @@ public class DataElement {
     private String dataCalendar;
 
     /*
-    * 构造方法
-    * */
-
-    public DataElement() {
-    }
-
-    /*
     * getter and setter
     * */
 

@@ -1,28 +1,34 @@
 package read.utils;
 
 import com.alibaba.fastjson.JSON;
+import entity.ChannelInfo;
 import entity.HFMEDHead;
-import entity.SensorProperties;
+import entity.HfmedSegmentHead;
+import impl.ReadFileImpl;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.*;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import read.Parameters;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * @author han56
  * @description 功能描述 【HDFS】相关客户端操作
  * @create 2021/10/19 上午11:02
  */
-public class HDFSUtils {
+public class HDFSUtils implements ReadFileImpl {
     private static FileSystem fileSystem;
+
+    public HDFSUtils() throws IOException {
+    }
 
     @Before
     public void init() throws URISyntaxException,IOException,InterruptedException{
@@ -43,24 +49,45 @@ public class HDFSUtils {
         fileSystem.close();
     }
 
+    @Test
+    public void testReadHFHead() throws IOException {
+        FSDataInputStream fsDataInputStream = fileSystem.open(
+                new Path("hdfs://hadoop101:8020/hy_history_data/September/S/Test_190925110520.HFMED"));
+        HDFSUtils utils = new HDFSUtils();
+        //打印前300Byte测试
+        //printByteFile(300,fsDataInputStream);
+        System.out.println("文件头输出测试：");
+        HFMEDHead resHead = utils.readFileHead(fsDataInputStream);
+        System.out.println(JSON.toJSONString(resHead));
+        System.out.println("通道信息输出测试：");
+        ChannelInfo[] channelInfos = utils.getChannelInfoByFile(fsDataInputStream,resHead.getChannelOnNum());
+        System.out.println(JSON.toJSONString(channelInfos));
+        System.out.println("第一个数据段输出测试：");
+        HfmedSegmentHead hfmedSegmentHead = utils.getDataHeadInfoByFile(fsDataInputStream,0, resHead.getChannelOnNum());
+        System.out.println(JSON.toJSONString(hfmedSegmentHead));
+        fsDataInputStream.close();
+    }
+
     /*
-    * 读取文件方法
+    * 打印文件 测试使用
     * */
-    public HFMEDHead readHFileHead(String pathStr) throws IOException {
+    public static void printByteFile(int skipLength,FSDataInputStream fsDataInputStream) throws IOException {
+        byte[] testPrint = new byte[skipLength];
+        int l=fsDataInputStream.read(testPrint);
+    }
 
-        Path path = new Path(pathStr);
-
-        //open file
-        FSDataInputStream fsDataInputStream = fileSystem.open(path);
+    /*
+    * 读取文件头操作方法
+    * */
+    @Override
+    public HFMEDHead readFileHead(FSDataInputStream fsDataInputStream) throws IOException {
 
         byte[] tempByte = new byte[186];
 
         int byteLenght = fsDataInputStream.read(tempByte);
-
-//        System.out.println(new String(temByte,0,byteLenght));
         /*
-        * 数据赋值
-        * */
+         * 数据赋值
+         * */
         byte[] fileHeadLengthByte = FindByte.searchByteSeq(tempByte,0,1);
         byte[] formatVerByte = FindByte.searchByteSeq(tempByte, 2, 5) ;
 
@@ -101,8 +128,9 @@ public class HDFSUtils {
         byte[] reserveByte = FindByte.searchByteSeq(tempByte, 182, 185) ;
 
         /*
-        * 数据转换
-        * */
+         * 数据转换
+         * */
+        String fileDurationStr = Byte2OtherDataFormat.byte2String(fileDurationByte);
         short fileHeadLength = Byte2OtherDataFormat.byte2Short(fileHeadLengthByte);
         String formatVer = Byte2OtherDataFormat.byte2String(formatVerByte);
         String dataFileName = Byte2OtherDataFormat.byte2String(dataFileNameByte);
@@ -110,15 +138,15 @@ public class HDFSUtils {
         String palaceName = Byte2OtherDataFormat.byte2String(palaceNameByte);
 
         /*
-        * 时间数据转换为String类型
-        * */
+         * 时间数据转换为String类型
+         * */
         String startDate = Byte2OtherDataFormat.byte2String(startDateByte);
         String sysCounter = Byte2OtherDataFormat.byte2String(sysCounterByte);
         String sysFeq = Byte2OtherDataFormat.byte2String(sysFeqByte);
 
         /*
-        * 其他数据转换
-        * */
+         * 其他数据转换
+         * */
         String userIdName = Byte2OtherDataFormat.byte2String(uesrIdNameByte);
         int adFre = Byte2OtherDataFormat.byte2Int(adFedByte);
         short resolution = Byte2OtherDataFormat.byte2Short(resolutionByte);
@@ -130,8 +158,8 @@ public class HDFSUtils {
         short channelOnNum = Byte2OtherDataFormat.byte2Short(channelOnNumByte);
 
         /*
-        * set bean 对象
-        * */
+         * set bean 对象
+         * */
         HFMEDHead hfmedHead = new HFMEDHead();
         hfmedHead.setAdFre(adFre);
         hfmedHead.setChannelOnNum(channelOnNum);
@@ -150,68 +178,25 @@ public class HDFSUtils {
         return hfmedHead;
     }
 
+    /*
+    * 读取通道信息操作方法
+    * */
+    @Override
+    public ChannelInfo[] getChannelInfoByFile(FSDataInputStream fsDataInputStream,short channelOnNum) throws IOException {
 
-    public String readDateSegmentHead() throws IOException {
-
-        byte[] dataSegmentHeadByte = new byte[34];
-
-        HFMEDHead hfmedHead = new HDFSUtils().readHFileHead("hdfs://hadoop101:8020/hy_history_data/September/S/Test_190925110520.HFMED");
-
-        if (hfmedHead.getChannelOnNum()==7){
-            Parameters.WenJianTou = 284;
-            Parameters.TongDaoDiagnose = 1;
-        }else if (hfmedHead.getChannelOnNum()==4){
-            Parameters.WenJianTou = 242;
-            Parameters.TongDaoDiagnose = 0;
-        }else {
-            System.out.println("通道数数值错误，无法执行");
-            return null;
-        }
-        FSDataInputStream fsDataInputStream = fileSystem.open(new Path("hdfs://hadoop101:8020/hy_history_data/September/S/Test_190925110520.HFMED"));
-
-        long skipByte = fsDataInputStream.skip(Parameters.WenJianTou);
-        int readLength = fsDataInputStream.read(dataSegmentHeadByte);
-
-        System.out.println("跳过字节数:"+skipByte);
-        System.out.println("读取字节数:"+readLength);
-
-        byte[] segmentDate = FindByte.searchByteSeq(dataSegmentHeadByte,8,17);
-        String startDate = "20" + segmentDate[0] + "-" +
-                segmentDate[1]+"-"+segmentDate[2]+" "+segmentDate[3]+":"+segmentDate[4]+":"+segmentDate[5];
-        System.out.println("切割文件头部日期:"+startDate);
-        return startDate;
-    }
-
-
-
-    public SensorProperties[] readSensorProperties(String fileName) throws IOException {
-        /*
-         * 声明7个Sensorproperties指针，这时候并没有为之分配空间 用于将下面求出的个字段封装起来
-         */
-        SensorProperties[] sensorProperties = new SensorProperties[7];
-
-        //为上面的每个引用分配空间
-        for (int i=0;i<7;i++)
-            sensorProperties[i] = new SensorProperties();
-        //存放头文件字节数组
-        byte[] fileHeadByte = new byte[186];
-
-        // 存放通道信息
-        byte[][] sensorArray = new byte[8][14];
-
-        FSDataInputStream fsDataInputStream = fileSystem.open(new Path(fileName));
-
-        // 将读到的头文件放入到字符数组缓冲区中
-        int readLength = fsDataInputStream.read(fileHeadByte);
+        ChannelInfo[] channelInfos = new ChannelInfo[channelOnNum];
+        for (int i=0;i<channelOnNum;i++)
+            channelInfos[i] = new ChannelInfo();
 
         // 将读到的通道信息放到二维的数组中
-        for (int i=0;i<7;i++){
-            int byteArrayLength = fsDataInputStream.read(sensorArray[i]);
+        for (int i=0;i<channelOnNum;i++){
+            byte[] sensorArray = new byte[14];
+            int byteArrayLength = fsDataInputStream.read(sensorArray);
             //获取字节序列
-            byte[] chNoByte = FindByte.searchByteSeq(sensorArray[i], 0, 1);
-            byte[] chNameByte = FindByte.searchByteSeq(sensorArray[i], 2, 5);
-            byte[] chUnitByte = FindByte.searchByteSeq(sensorArray[i], 6, 9);
-            byte[] chCaliByte = FindByte.searchByteSeq(sensorArray[i], 10, 13);
+            byte[] chNoByte = FindByte.searchByteSeq(sensorArray, 0, 1);
+            byte[] chNameByte = FindByte.searchByteSeq(sensorArray, 2, 5);
+            byte[] chUnitByte = FindByte.searchByteSeq(sensorArray, 6, 9);
+            byte[] chCaliByte = FindByte.searchByteSeq(sensorArray, 10, 13);
             byte[] tempFloat ={chCaliByte[3] ,chCaliByte[2] ,chCaliByte[1] ,chCaliByte[0]} ;
 
             //解析字符序列
@@ -222,24 +207,48 @@ public class HDFSUtils {
             float fchCali = dis.readFloat();
             dis.close();
 
-            sensorProperties[i].setChName(chName);
-            sensorProperties[i].setChNo(chNo);
-            sensorProperties[i].setChUnit(chUnit);
-            sensorProperties[i].setChCali(fchCali);
+            channelInfos[i].setChName(chName);
+            channelInfos[i].setChNo(chNo);
+            channelInfos[i].setChUnit(chUnit);
+            channelInfos[i].setChCali(fchCali);
 
         }
+        return channelInfos;
+    }
 
-        return sensorProperties;
+    /*
+     * 读取数据段头操作方法
+     * */
+    @Override
+    public HfmedSegmentHead getDataHeadInfoByFile(FSDataInputStream fsDataInputStream,int segmentNum,short channelOnNum) throws IOException {
 
+        //根据channelOnNum计算要跳过多少字节
+        /*
+        * 文件头186
+        *     +
+        * channelOnNum*14
+        * */
+        //存放数据段头信息
+        byte[] segHeadData = new byte[34];
+        long readLen=fsDataInputStream.read(segHeadData);
+        byte[] featureCodeByte = FindByte.searchByteSeq(segHeadData,0,3);
+        byte[] segmentNoByte = FindByte.searchByteSeq(segHeadData,4,7);
+        byte[] segmentDateByte = FindByte.searchByteSeq(segHeadData,8,17);
+
+        //转换二进制
+        int segmentNo = Byte2OtherDataFormat.byte2Int(segmentNoByte);
+        String segmentDateStr = "20"+segmentDateByte[0]+"-"+segmentDateByte[1]+"-"+segmentDateByte[2]+" "
+                +segmentDateByte[3]+":"+segmentDateByte[4]+":"+segmentDateByte[5];
+        String featureCodeStr = Byte2OtherDataFormat.byte2String(featureCodeByte);
+
+        //封装序列化
+        HfmedSegmentHead hfmedSegmentHead = new HfmedSegmentHead();
+        hfmedSegmentHead.setSegmentNo(segmentNo);
+        hfmedSegmentHead.setFeatureCode(featureCodeStr);
+        hfmedSegmentHead.setSysTime(segmentDateStr);
+        return hfmedSegmentHead;
     }
 
 
-    @Test
-    public void testReadHFHead() throws IOException {
-        String pathStr = "hdfs://hadoop101:8020/hy_history_data/September/S/Test_190925110520.HFMED";
-        HDFSUtils utils = new HDFSUtils();
-        HFMEDHead hfmedHead = utils.readHFileHead(pathStr);
-        System.out.println(JSON.toJSONString(hfmedHead));
-    }
 
 }

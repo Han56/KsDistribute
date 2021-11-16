@@ -22,13 +22,13 @@ import java.util.Arrays;
 public class HfmedSegmentHead {
 
     /** 特征码 */
-    private byte[] featureCode ;
+    private String featureCode ;
 
     /** 数据段编号  */
     private int segmentNo ;
 
     /** 数据段头的时间 这个是有用的　*/
-    private byte[] sysTime ;
+    private String sysTime ;
 
     /** usb传输前的系统微妙时钟   */
     private byte[] usbBeforeCurrency ;
@@ -41,25 +41,11 @@ public class HfmedSegmentHead {
         // TODO Auto-generated constructor stub
     }
 
-    public HfmedSegmentHead(byte[] featureCode, int segmentNo, byte[] sysTime,
-                            byte[] usbBeforeCurrency, byte[] usbAfterCurrency) {
-        super();
-        this.featureCode = featureCode;
-        this.segmentNo = segmentNo;
-        this.sysTime = sysTime;
-        this.usbBeforeCurrency = usbBeforeCurrency;
-        this.usbAfterCurrency = usbAfterCurrency;
-    }
-
-    /*
-    * getter and setter
-    * */
-
-    public byte[] getFeatureCode() {
+    public String getFeatureCode() {
         return featureCode;
     }
 
-    public void setFeatureCode(byte[] featureCode) {
+    public void setFeatureCode(String featureCode) {
         this.featureCode = featureCode;
     }
 
@@ -71,40 +57,11 @@ public class HfmedSegmentHead {
         this.segmentNo = segmentNo;
     }
 
-    public byte[] getSysTime() {
+    public String getSysTime() {
         return sysTime;
     }
 
-    public void setSysTime(byte[] sysTime) {
+    public void setSysTime(String sysTime) {
         this.sysTime = sysTime;
     }
-
-    public byte[] getUsbBeforeCurrency() {
-        return usbBeforeCurrency;
-    }
-
-    public void setUsbBeforeCurrency(byte[] usbBeforeCurrency) {
-        this.usbBeforeCurrency = usbBeforeCurrency;
-    }
-
-    public byte[] getUsbAfterCurrency() {
-        return usbAfterCurrency;
-    }
-
-    public void setUsbAfterCurrency(byte[] usbAfterCurrency) {
-        this.usbAfterCurrency = usbAfterCurrency;
-    }
-
-    /*
-    * 重载 toString 方法
-    * */
-    @Override
-    public String toString() {
-        return "HfmedSegmentHead [featureCode=" + Arrays.toString(featureCode)
-                + ", segmentNo=" + segmentNo + ", sysTime="
-                + Arrays.toString(sysTime) + ", usbBeforeCurrency="
-                + Arrays.toString(usbBeforeCurrency) + ", usbAfterCurrency="
-                + Arrays.toString(usbAfterCurrency) + "]";
-    }
-
 }
