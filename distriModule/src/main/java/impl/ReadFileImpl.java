@@ -1,6 +1,7 @@
 package impl;
 
 import entity.ChannelInfo;
+import entity.DataElement;
 import entity.HFMEDHead;
 import entity.HfmedSegmentHead;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -22,9 +23,13 @@ public interface ReadFileImpl {
     ChannelInfo[] getChannelInfoByFile(FSDataInputStream fsDataInputStream,short channelOnNum) throws IOException;
 
     //读取数据段头
-    HfmedSegmentHead getDataHeadInfoByFile(FSDataInputStream fsDataInputStream,int segmentNum,short channelOnNum) throws IOException;
+    HfmedSegmentHead getDataHeadInfoByFile(FSDataInputStream fsDataInputStream,byte[] preRead,short channelOnNum) throws IOException;
 
     //读取数据段
-
+    /*
+    * 参数1：fsDataInputStream 输入流
+    * 参数2：通道数
+    * */
+    DataElement getDataInfoByFile(FSDataInputStream fsDataInputStream,byte[] preRead,short channelOnNum,int loopCount) throws IOException;
 
 }

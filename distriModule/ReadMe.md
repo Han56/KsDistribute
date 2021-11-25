@@ -2,7 +2,7 @@
 
 ## 环境及相关参数配置 ##
 
-基于 hadoop-3.1.3 、 hbase -2.3.6 、zookeeper-3.4.10、jdk1.8
+基于 hadoop-3.1.3 、 hbase -2.3.6 、zookeeper-3.4.10、jdk1.8、Flink 1.10.1、
 
 
 
@@ -382,15 +382,6 @@ unity 包中全部都是 bean 对象。对各种文件内容的数据模型定�
 				dataElement.setZ2(z2);
 			}
 		}
-		if (channel == 123) {
-			short x1 = Byte2Short.byte2Short(dataByte[0], dataByte[1]);
-			short y1 = Byte2Short.byte2Short(dataByte[2], dataByte[3]);
-			short z1 = Byte2Short.byte2Short(dataByte[4], dataByte[5]);
-
-			dataElement.setX1(x1);
-			dataElement.setY1(y1);
-			dataElement.setZ1(z1);
-		}
 		if (channel == 123456) {
 			if (manager.isMrMa[sensorID] == true) {
 				short x1 = Byte2Short.byte2Short(readsan[0], readsan[1]);
@@ -429,9 +420,75 @@ unity 包中全部都是 bean 对象。对各种文件内容的数据模型定�
 
 以下是一些异常问题的善后操作，应该设立一个异常处理接口，将这些方法进行集中，而不是直接写在一个类中，导致实体类不像实体类，服务层不像服务层。
 
+
+
+读取一秒数据：（申请变量）
+
+```
+	/** this is a vector used to store one second data. */
+	private Vector<String> data;// Vector<String>(线程同步数据列表)
+	/** when GPS signal has gone, its value become true */
+	public boolean isBroken = false;
+	/** 秒数计数器 , 每调用一次getData的时候 ，这个计数器就加一 ，表示加一秒 */
+	public int timeCount = 0;
+	/** the number of sensor. */
+	private int sensorID = 0;
+	/** the name of sensor. */
+	private String sensorName = "";
+	/** 调用次数 */
+	private int countSetState = 0;
+
+	/** 上次访问文件名 */
+	private String nameF1 = " ";
+	/** 数据段总数 */
+	private int segmentNum;
+	/** 每个数据段中数据的个数 */
+	private int segmentRecNum;
+	/** 通道个数 */
+	private int channelNum;
+	/** 通道个数字符串用于读取 */
+	private int channel;
+	/** 数据头、文件头、字节数、电压起始、电压结束 */
+	private int datahead;
+	/** 缓冲池大小，10个传感器*频率*10s时间。 */
+	private int bufferPoolSize = 10 * (Parameters.FREQUENCY + 200) * 10;
+
+	private int bytenum;
+	private int voltstart;
+	private int voltend;
+	boolean flag1 = false;
+	boolean flag2 = false;
+
+	/** 第一条数据的日期 */
+	private Date date = new Date();
+	/** 通道单位大小 */
+	private float chCahi;
+	/** 最新文件所在的目录路径 */
+	private String filePath;
+	/** the file to read */
+	private File file;
+	/** 流的重定向 */
+	private BufferedInputStream buffered;
+	/** 存放文件的字节 */
+	private byte[] dataByte;
+	/** 对齐要跳过的字节 */
+	private byte[] dataByte1;
+	/** 存放1秒数据的字节 */
+	private byte[] dataYiMiao;
+	/** 三个字节进行显示 */
+	private byte[] readsan;
+	private String newS;
+
+	private ADMINISTRATOR manager;
+```
+
+
+
 #### 异常处理接口
 
-*this.formerDate()*
+（2）（3）方法都是为了处理 segmentRecNum 与文件位数对应不准的问题。
+
+（1）*this.formerDate()*：处理GPS压力跳秒加一问题
 
 ```java
 	/**
@@ -447,9 +504,23 @@ unity 包中全部都是 bean 对象。对各种文件内容的数据模型定�
 	}
 ```
 
+（2）【自定义】前探方法：每次读取下一个数据段之前，需要用 ByteBuffer 装载下 下一个数据段的前四位查看是否为 HFMD 特征码，如果是这个码则说明已经数据段已经读完了，读到了下一秒的数据段头的特征码了，所以结束
+
+
+
+（3）电压跳动处理方法：voltProcessing 用于查看高低电平是否变化，读数据段 14位/8位 中的末尾两位，如果高低电平结束，说明一秒的数据已经结束，即不一定要循环 segmentRecNum ，碰到这个之后就要跳出来读下一秒的数据了。
+
+
+
+（4）文件末尾处理方法：即已经读到文件末尾了，准备后事。
+
 
 
 ### 计算过程 ###
+
+#### 技术框架的选择
+
+一.Flink
 
 由于之前一直在进行分布式计算前的准备工作，所以注意点并未在这一方面。根据调研发现，MapReduce虽然 可以实现目前的工作，但是这种技术已经在被逐渐的替代，引自美团技术团队的实时数仓文章：
 
@@ -477,5 +548,55 @@ Flink不仅能够在实时处理上进行应用，在处理离线的问题上同
 
 **有界数据流：**有界数据流有明确定义的开始和结束，可以在执行 任何计算之前通过获取所有数据来处理有界流，处理有界流不需要有序读取。目前我们的离线数据读取和计算工作就满足这一条件 。所以最终选择flink作为计算模块的核心框架。
 
- 
+
+
+FlinkML 基于Filnk平台的机器学习工具 使用Scala语言，但是FlinkML的机器学习论坛还很冷门，无法找到一些可以使用的资源。
+
+
+
+（2）Spark ML lib
+
+优势在于有丰富的ML论坛，可以提供现成的算法。
+
+
+
+#### 参考论文
+
+机器学习预测实验室地震
+
+
+
+会议任务分配记录:
+
+
+
+张翰林：找可以使CS CAD图背景变白的源代码。
+
+
+
+CS 胡永亮  王凯路：预警界面配色 ，预警界面的文字对话框，CAD图的白色显示，预警算法（胡），时间序列预测的现有框架
+
+左侧：短期预测                                                              右侧：中长期预测，时间次数 、能量、B值、矩张量 、能量频次比、震级 
+
+预测数据库的列起始时间终止时间 三个点的平面坐标 能量 震级 ，  综合指数法左侧 or 右侧 待定。
+
+
+
+王智涵 郑吉源：
+
+3.0继续完善。
+
+
+
+于海友：
+
+对接程序确认。
+
+
+
+
+
+
+
+
 

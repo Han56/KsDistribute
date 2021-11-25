@@ -2,20 +2,24 @@ package read.utils;
 
 import com.alibaba.fastjson.JSON;
 import entity.ChannelInfo;
+import entity.DataElement;
 import entity.HFMEDHead;
 import entity.HfmedSegmentHead;
+import impl.ExceptionalImp;
 import impl.ReadFileImpl;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.*;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import read.Parameters;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,8 +28,18 @@ import java.util.List;
  * @description 功能描述 【HDFS】相关客户端操作
  * @create 2021/10/19 上午11:02
  */
-public class HDFSUtils implements ReadFileImpl {
+public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
     private static FileSystem fileSystem;
+
+    boolean isBroken = false;
+    boolean flag1 = false;
+    boolean flag2 = false;
+    public int timeCount = 0;
+
+    /*
+    * 测试数据
+    * */
+    List<String> filesPath = new ArrayList<>();
 
     public HDFSUtils() throws IOException {
     }
@@ -50,22 +64,83 @@ public class HDFSUtils implements ReadFileImpl {
     }
 
     @Test
-    public void testReadHFHead() throws IOException {
-        FSDataInputStream fsDataInputStream = fileSystem.open(
-                new Path("hdfs://hadoop101:8020/hy_history_data/September/S/Test_190925110520.HFMED"));
-        HDFSUtils utils = new HDFSUtils();
-        //打印前300Byte测试
-        //printByteFile(300,fsDataInputStream);
-        System.out.println("文件头输出测试：");
-        HFMEDHead resHead = utils.readFileHead(fsDataInputStream);
-        System.out.println(JSON.toJSONString(resHead));
-        System.out.println("通道信息输出测试：");
-        ChannelInfo[] channelInfos = utils.getChannelInfoByFile(fsDataInputStream,resHead.getChannelOnNum());
-        System.out.println(JSON.toJSONString(channelInfos));
-        System.out.println("第一个数据段输出测试：");
-        HfmedSegmentHead hfmedSegmentHead = utils.getDataHeadInfoByFile(fsDataInputStream,0, resHead.getChannelOnNum());
-        System.out.println(JSON.toJSONString(hfmedSegmentHead));
-        fsDataInputStream.close();
+    public void testReadHFHead() throws IOException, InterruptedException, ParseException {
+        filesPath.add("hdfs://hadoop101:8020/hy_history_data/September/S/Test_190925110520.HFMED");
+        filesPath.add("hdfs://hadoop101:8020/hy_history_data/September/Z/Test_190925103745.HFMED");
+        filesPath.add("hdfs://hadoop101:8020/hy_history_data/September/U/Test_190925105915.HFMED");
+        filesPath.add("hdfs://hadoop101:8020/hy_history_data/September/V/Test_190925100949.HFMED");
+        filesPath.add("hdfs://hadoop101:8020/hy_history_data/September/Y/Test_190925101650.HFMED");
+        filesPath.add("hdfs://hadoop101:8020/hy_history_data/September/T/Test_190925104506.HFMED");
+
+        DateUtils dateUtils = new DateUtils();
+        List<String> startAndEndTime = dateUtils.getStartAndEndTime(filesPath);
+        System.out.println("window start:"+startAndEndTime.get(0)+"window end:"+startAndEndTime.get(1));
+        String winStart = startAndEndTime.get(0);String winEnd = startAndEndTime.get(1);
+
+        for (String path:filesPath){
+            System.out.println("开始读取文件："+path);
+            FSDataInputStream fsDataInputStream = fileSystem.open(
+                    new Path(path));
+            HDFSUtils utils = new HDFSUtils();
+            System.out.println("文件头输出测试：");
+            HFMEDHead resHead = utils.readFileHead(fsDataInputStream);
+            System.out.println(JSON.toJSONString(resHead));
+            System.out.println("通道信息输出测试：");
+            ChannelInfo[] channelInfos = utils.getChannelInfoByFile(fsDataInputStream,resHead.getChannelOnNum());
+            System.out.println(JSON.toJSONString(channelInfos));
+            HfmedSegmentHead hfmedSegmentHead = null;
+            DataElement resData;
+            int by=-1;
+            boolean fileIsOver = false;
+            int loopCount = 0;
+            //读数据段头和数据段
+            while (true){
+                /*
+                 * 读之前需要判断是否到达了末尾
+                 * */
+                byte[] preRead = new byte[4];
+                fsDataInputStream.read(preRead);
+                byte[] featureCode = {preRead[0],preRead[1],preRead[2],preRead[3]};
+                String isHFME = new String(featureCode);
+                System.out.println("isHFME?  "+isHFME);
+                if (isHFME.equals("HFME")){
+                    loopCount=0;
+                    //读数据段头
+                    /*
+                     * 如果时间等于 每一组文件 的起点时间则开始读取，否则 continue
+                     * 跳出循环条件：如果时间等于 每组文件的结束时间 则break while
+                     * */
+                    hfmedSegmentHead=getDataHeadInfoByFile(fsDataInputStream,preRead, resHead.getChannelOnNum());
+                    //方便调试，遇到特征码停一秒
+                    Thread.sleep(2000);
+                }
+                //如果段头时间小于winStart:只向下读，不存储
+                if (!dateUtils.segTimeCompareToWinStartTime(hfmedSegmentHead.getSysTime(),winStart)){
+                    getDataInfoByFile(fsDataInputStream,preRead, resHead.getChannelOnNum(), loopCount);
+                    System.out.println("非窗口内数据，仅读取不存储");
+                    loopCount++;
+                }
+                //如果段头时间大于winEnd 可以结束了
+                if (dateUtils.segTimeCompareToWinEndTime(hfmedSegmentHead.getSysTime(),winEnd)){
+                    Thread.sleep(2000);
+                    System.out.println("到达窗口末端，换下一个文件");
+                    break;
+                }
+                //如果段头时间大于 winStart 可以读取
+                if (dateUtils.segTimeCompareToWinStartTime(hfmedSegmentHead.getSysTime(),winStart)){
+                    resData = getDataInfoByFile(fsDataInputStream,preRead, resHead.getChannelOnNum(), loopCount);
+                    loopCount++;
+                    if (resData==null){
+                        System.out.println("电压缺失，一秒数据已结束，");
+                        continue;
+                    }
+                    //存储resData 进容器 等待持久化
+                    System.out.println("合法数据，存储"+loopCount);
+                }
+            }
+            fsDataInputStream.close();
+        }
+
     }
 
     /*
@@ -220,7 +295,7 @@ public class HDFSUtils implements ReadFileImpl {
      * 读取数据段头操作方法
      * */
     @Override
-    public HfmedSegmentHead getDataHeadInfoByFile(FSDataInputStream fsDataInputStream,int segmentNum,short channelOnNum) throws IOException {
+    public HfmedSegmentHead getDataHeadInfoByFile(FSDataInputStream fsDataInputStream,byte[] preRead,short channelOnNum) throws IOException {
 
         //根据channelOnNum计算要跳过多少字节
         /*
@@ -230,7 +305,11 @@ public class HDFSUtils implements ReadFileImpl {
         * */
         //存放数据段头信息
         byte[] segHeadData = new byte[34];
-        long readLen=fsDataInputStream.read(segHeadData);
+        byte[] rearRead = new byte[30];
+        fsDataInputStream.read(rearRead);
+        //进行拼接
+        System.arraycopy(preRead,0,segHeadData,0,preRead.length);
+        System.arraycopy(rearRead,0,segHeadData,preRead.length,rearRead.length);
         byte[] featureCodeByte = FindByte.searchByteSeq(segHeadData,0,3);
         byte[] segmentNoByte = FindByte.searchByteSeq(segHeadData,4,7);
         byte[] segmentDateByte = FindByte.searchByteSeq(segHeadData,8,17);
@@ -246,9 +325,122 @@ public class HDFSUtils implements ReadFileImpl {
         hfmedSegmentHead.setSegmentNo(segmentNo);
         hfmedSegmentHead.setFeatureCode(featureCodeStr);
         hfmedSegmentHead.setSysTime(segmentDateStr);
+        //print test
+        System.out.println(JSON.toJSONString(hfmedSegmentHead));
         return hfmedSegmentHead;
     }
 
+    /*
+    * 读取数据段重写方法
+    * */
+    @Override
+    public DataElement getDataInfoByFile(FSDataInputStream fsDataInputStream,byte[] preRead,short channelOnNum,int loopCount) throws IOException {
+        int byteNum,voltStart,voltEnd;
+        short volt;
+        DataElement dataElement = new DataElement();
+        //根据通道数设置读取的字节数
+        if (channelOnNum==7){
+            byteNum=14;voltStart=12;voltEnd=13;
+            byte[] data = new byte[byteNum];
+            byte[] rearRead = new byte[10];
+            fsDataInputStream.read(rearRead);
+            //进行拼接
+            System.arraycopy(preRead,0,data,0,preRead.length);
+            System.arraycopy(rearRead,0,data,preRead.length,rearRead.length);
+            short x1 = Byte2OtherDataFormat.byte2Short(data[0], data[1]);
+            short y1 = Byte2OtherDataFormat.byte2Short(data[2], data[3]);
+            short z1 = Byte2OtherDataFormat.byte2Short(data[4], data[5]);
+            short x2 = Byte2OtherDataFormat.byte2Short(data[6], data[7]);
+            short y2 = Byte2OtherDataFormat.byte2Short(data[8], data[9]);
+            short z2 = Byte2OtherDataFormat.byte2Short(data[10], data[11]);
 
+            dataElement.setX1(x1);
+            dataElement.setY1(y1);
+            dataElement.setZ1(z1);
 
+            dataElement.setX2(x2);
+            dataElement.setY2(y2);
+            dataElement.setZ2(z2);
+            volt = Byte2OtherDataFormat.byte2Short(data[voltStart],data[voltEnd]);
+        }else if (channelOnNum==4){
+            byteNum=8;voltStart=6;voltEnd=7;
+            byte[] data = new byte[byteNum];
+            byte[] rearRead = new byte[4];
+            fsDataInputStream.read(rearRead);
+            //进行拼接
+            System.arraycopy(preRead,0,data,0,preRead.length);
+            System.arraycopy(rearRead,0,data,preRead.length,rearRead.length);
+            short x2=Byte2OtherDataFormat.byte2Short(data[0],data[1]);
+            short y2=Byte2OtherDataFormat.byte2Short(data[2],data[3]);
+            short z2=Byte2OtherDataFormat.byte2Short(data[4],data[5]);
+            dataElement.setX2(x2);dataElement.setY2(y2);dataElement.setZ2(z2);
+            volt = Byte2OtherDataFormat.byte2Short(data[voltStart],data[voltEnd]);
+        }
+        else{
+            System.out.println("通道信息数目异常,结束读取,数值为:"+channelOnNum);
+            return null;
+        }
+        //高低电平判断是否一秒结束
+        if (voltProcessing(volt,loopCount))
+            return null;
+        //打印测试
+        System.out.println(JSON.toJSONString(dataElement));
+        return dataElement;
+    }
+
+    /*
+    * 重写异常处理方法
+    * */
+
+    /*
+    * GPS跳秒问题
+    * */
+    @Override
+    public String formerDate() {
+        return null;
+    }
+
+    /*
+    * 尾部处理方法
+    * 一个文件读到末尾后，关闭数据流
+    * */
+    @Override
+    public void tailOfflineProcess() {
+
+    }
+
+    /*
+    * 高低电平——一秒数据段结束标志
+    * */
+    @Override
+    public boolean voltProcessing(short voltValue, int loopCount) {
+        if (!isBroken){
+            if (loopCount>(Parameters.FREQUENCY+210)){
+                isBroken=true;
+                System.out.println("该文件出现GPS缺失");
+                timeCount++;
+                flag1=flag2=false;
+                return true;
+            }
+            //判断1s是否结束，结束跳出while
+            if (Math.abs(voltValue)<1000)
+                flag2=true;
+            if (Math.abs(voltValue)>5000&&flag2)
+                flag1=true;
+            //高电平结束，说明1s数据结束
+            if (flag1&&flag2){
+                timeCount++;
+                flag1=flag2=false;
+                return true;
+            }
+        }else {
+            //在对齐时就出现电压缺失，直接到这部分
+            if (loopCount>=(Parameters.FREQUENCY+200)){
+                timeCount++;
+                flag1=flag2=false;
+                return true;
+            }
+        }
+        return false;
+    }
 }
