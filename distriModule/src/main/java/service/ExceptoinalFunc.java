@@ -9,8 +9,9 @@ import impl.ExceptionalImp;
  * @create 2021/11/18 下午4:35
  */
 public class ExceptoinalFunc implements ExceptionalImp {
+
     @Override
-    public String formerDate() {
+    public String formerDate(String segDate, int timeCount) {
         return null;
     }
 

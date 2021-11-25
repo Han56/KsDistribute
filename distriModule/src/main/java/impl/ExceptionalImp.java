@@ -9,7 +9,7 @@ package impl;
 public interface ExceptionalImp {
 
     //处理GPS压力跳秒加一问题
-    String formerDate();
+    String formerDate(String segDate,int timeCount);
 
     //读取文件到末尾的操作
     void tailOfflineProcess();

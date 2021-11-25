@@ -20,7 +20,10 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -126,7 +129,7 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
                     System.out.println("到达窗口末端，换下一个文件");
                     break;
                 }
-                //如果段头时间大于 winStart 可以读取
+                //如果段头时间大于/等于 winStart 可以读取
                 if (dateUtils.segTimeCompareToWinStartTime(hfmedSegmentHead.getSysTime(),winStart)){
                     resData = getDataInfoByFile(fsDataInputStream,preRead, resHead.getChannelOnNum(), loopCount);
                     loopCount++;
@@ -362,7 +365,8 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
             dataElement.setY2(y2);
             dataElement.setZ2(z2);
             volt = Byte2OtherDataFormat.byte2Short(data[voltStart],data[voltEnd]);
-        }else if (channelOnNum==4){
+        }
+        else if (channelOnNum==4){
             byteNum=8;voltStart=6;voltEnd=7;
             byte[] data = new byte[byteNum];
             byte[] rearRead = new byte[4];
@@ -393,11 +397,29 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
     * */
 
     /*
-    * GPS跳秒问题
+    * 解决每个频率周期数据结束
+    * 根据timeCount即可得到下一秒的数据
     * */
     @Override
-    public String formerDate() {
-        return null;
+    public String formerDate(String segHeadDate,int timeCount) {
+        SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");// 24小时制
+        //引号里面个格式也可以是 HH:mm:ss或者HH:mm等等，很随意的，不过在主函数调用时，要和输入的变
+        //量day格式一致
+        Date date = null;
+        try {
+            date = format.parse(segHeadDate);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+        if (date == null)
+            return "";
+        System.out.println("front:" + format.format(date)); //显示输入的日期
+        Calendar cal = Calendar.getInstance();
+        cal.setTime(date);
+        cal.add(Calendar.SECOND, timeCount);// 24小时制
+        date = cal.getTime();
+        System.out.println("after:" + format.format(date));  //显示更新后的日期
+        return format.format(date);
     }
 
     /*
