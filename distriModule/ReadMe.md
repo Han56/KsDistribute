@@ -106,7 +106,7 @@ https://mp.weixin.qq.com/s?__biz=Mzg3OTI1ODkzOQ==&mid=2247485618&idx=1&sn=0ea1df
 
 
 
-### 第一次对齐阶段
+### 外部对齐阶段
 
 基于集中式代码的逻辑，对现有程序进行优化。
 
@@ -211,7 +211,7 @@ Test_没用，后面的是时间信息，比如 190923080744 就代表 19年9月
 **回溯 backtrack 方法：**
 
 ```java
- /*
+   /*
     * 回溯递归方法
     * */
     public void backtrack(LinkedList<String> track,Map<Character,List<String>> map,List<Character> panfus,int start,int k) throws ParseException {
@@ -281,10 +281,6 @@ unity 包中全部都是 bean 对象。对各种文件内容的数据模型定�
 最后，将ReadDateFromHead、ReadHfmedHead、ReadSensorProperties三个类中的方法放在了接口中，接口即方法的集合，在HDFSUtil类中实现接口并重载实现具体的逻辑代码。
 
 
-
-其中，这里原来的问题不仅仅在模块管理混乱，而且譬如上述所说的三个类，功能严重重叠，几乎每个类都要进行一次IO操作重复读头文件数据。这样做的弊端不仅在多次IO上，且申请了众多缓冲区也会导致虚拟机认为该区域为热点区域，导致不会被释放。
-
-所以，对此进行了优化，使其仅读取了一次，然后对数据进行封装。且使用了 hdfs 提供的API进行读取。它的好处在于比Java的内置类更加轻便，撇出了一些繁重的内容。
 
 #### 读取文件接口
 
@@ -480,6 +476,8 @@ unity 包中全部都是 bean 对象。对各种文件内容的数据模型定�
 	private ADMINISTRATOR manager;
 ```
 
+以上都是对单个文件的读取操作，且源程序通过多线程来做到并行读取的。那么切换到分布式集群运行的话就不需要对程序本身做并行处理了，因为集群的存在就是为了解决并行程序的，只需要将对单个文件操作的程序放到集群上跑就可以了。
+
 
 
 #### 异常处理接口
@@ -489,32 +487,143 @@ unity 包中全部都是 bean 对象。对各种文件内容的数据模型定�
 （1）*this.formerDate()*：处理GPS压力跳秒加一问题
 
 ```java
-	/**
-	 * 刘老师仪器使用。 时间的规整函数，当GPS压力位出现跳秒时，我们进行时间+1秒操作。
-	 */
-	public String formerDate() {
-		Calendar calendar = Calendar.getInstance(); // 内存溢出的出错位置
-		calendar.setTime(this.date);
-		calendar.add(Calendar.SECOND, timeCount);
-		Date startDate1 = calendar.getTime();
-		SimpleDateFormat format2 = new SimpleDateFormat("yyyy-MM-ddHH:mm:ss");
-		return format2.format(startDate1);
-	}
+    /*
+    * 解决每个频率周期数据结束
+    * 根据timeCount即可得到下一秒的数据
+    * */
+    @Override
+    public String formerDate(String segHeadDate,int timeCount) {
+        SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");// 24小时制
+        //引号里面个格式也可以是 HH:mm:ss或者HH:mm等等，很随意的，不过在主函数调用时，要和输入的变
+        //量day格式一致
+        Date date = null;
+        try {
+            date = format.parse(segHeadDate);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+        if (date == null)
+            return "";
+        System.out.println("front:" + format.format(date)); //显示输入的日期
+        Calendar cal = Calendar.getInstance();
+        cal.setTime(date);
+        cal.add(Calendar.SECOND, timeCount);// 24小时制
+        date = cal.getTime();
+        System.out.println("after:" + format.format(date));  //显示更新后的日期
+        return format.format(date);
+    }
 ```
 
-（2）【自定义】前探方法：每次读取下一个数据段之前，需要用 ByteBuffer 装载下 下一个数据段的前四位查看是否为 HFMD 特征码，如果是这个码则说明已经数据段已经读完了，读到了下一秒的数据段头的特征码了，所以结束
+
+
+（2）电压跳动处理方法：voltProcessing 用于查看高低电平是否变化，读数据段 14位/8位 中的末尾两位，如果高低电平结束，说明一秒的数据已经结束，即不一定要循环 segmentRecNum ，碰到这个之后就要跳出来读下一秒的数据了。
+
+```java
+ /*
+    * 高低电平——一秒数据段结束标志
+    * */
+    @Override
+    public boolean voltProcessing(short voltValue, int loopCount) {
+        if (!isBroken){
+            if (loopCount>(Parameters.FREQUENCY+210)){
+                isBroken=true;
+                System.out.println("该文件出现GPS缺失");
+                timeCount++;
+                flag1=flag2=false;
+                return true;
+            }
+            //判断1s是否结束，结束跳出while
+            if (Math.abs(voltValue)<1000)
+                flag2=true;
+            if (Math.abs(voltValue)>5000&&flag2)
+                flag1=true;
+            //高电平结束，说明1s数据结束
+            if (flag1&&flag2){
+                timeCount++;
+                flag1=flag2=false;
+                return true;
+            }
+        }else {
+            //在对齐时就出现电压缺失，直接到这部分
+            if (loopCount>=(Parameters.FREQUENCY+200)){
+                timeCount++;
+                flag1=flag2=false;
+                return true;
+            }
+        }
+        return false;
+    }
+```
 
 
 
-（3）电压跳动处理方法：voltProcessing 用于查看高低电平是否变化，读数据段 14位/8位 中的末尾两位，如果高低电平结束，说明一秒的数据已经结束，即不一定要循环 segmentRecNum ，碰到这个之后就要跳出来读下一秒的数据了。
+（3）文件末尾处理方法：即已经读到文件末尾了，准备换下一个文件或者结束循环。
 
 
 
-（4）文件末尾处理方法：即已经读到文件末尾了，准备换下一个文件或者结束循环。
+根据学长的源码，可以分为一下情形：
+
+- **第一种情形**：读到的数据长度 < 通道数*2 说明这个文件的末尾无法提供足够的长度了，也是结束的标志。
+
+- **第二种情形**：读到数据长度 == -1 说明当前这个文件已经被榨干了，换下一个接着榨。
+
+- 第三种情形：读到数据长度 <  通道数*2 但是后面还有数据，要跳过这条数据，这个没关系可以不用处理，可以在后期进行清理，清除掉某个属性值为空的数据即可完成。
+
+  
 
 ### 存储过程 ###
 
-承接上面的读取部分，目前读取部分已经完成，
+承接上面的读取部分，目前读取部分已经完成。
+
+
+
+***程序上二次封装***：需要做一个类似网站开发中前后端分离的VO层逻辑，对最终存储的数据进行整合，数据的来源就在那几个实体类中，需要将其依次拿出来进行二次封装。
+
+所需要的数据格式：
+
+```json
+{
+    //一条数据段的数据
+    dataElement:{
+       amplitude:"26161251",
+       dataCalendar:"2019-09-25 10:41:49",
+       x1:"55",
+       x2:"4",
+       y1:"37",
+       y2:"11662",
+       z1:"187",
+       z2:"11615"
+    },
+    //数据段头
+    HfmedSegmentHead:{
+        ...
+    },
+    //文件头
+    HFMEDHead:{
+        ...
+    },
+    //通道信息
+    ChannelInfo:{
+        ...
+    },
+    //窗口起始时间
+    winStartDate:"2019-09-25 11:05:20",
+    //窗口结束时间
+    winEndDate:"2019-09-25 11:09:49",
+    //所属文件
+    fileName:"hdfs://hadoop101:8020/hy_history_data/September/S/Test_190925110520.HFMED",
+    //文件夹
+    folder:"S",
+    //表示第几组数据：根据映射文件的行数决定
+    dataGroup: "3",
+}
+```
+
+
+
+
+
+***存在哪？***这块应该为后来的计算部分做对应，使计算部分能够拿到合适的数据格式。
 
 
 
@@ -522,9 +631,9 @@ unity 包中全部都是 bean 对象。对各种文件内容的数据模型定�
 
 目前存储的数据还有极小部分的数据冒头问题，具体问题如下图所示。
 
+![](/data/files/杂项/研究生阶段/后台程序运行截图/数据冒头演示图.png)
 
-
-不过这样的问题极其微小，但是为了不影响计算的精度，还是应该将数据进行清洗。
+不过这样的问题极其微小，但是为了不影响计算的精度，还是应该将数据进行清洗。不清洗的话就要考虑加在后面对计算结果的影响。
 
 
 
@@ -541,7 +650,7 @@ unity 包中全部都是 bean 对象。对各种文件内容的数据模型定�
 
 Flink不仅能够在实时处理上进行应用，在处理离线的问题上同样十分出众。
 
-首先要了解流处理 与 批处理的区别：
+首先要了解 流处理 与 批处理的区别：
 
 **批处理**的特点是有界、持久、大量，非常适合需要访问全套记录才能完成的计算工作，一般用于离线统计。
 
@@ -569,7 +678,7 @@ FlinkML 基于Filnk平台的机器学习工具 使用Scala语言，但是FlinkML
 
 （2）Spark ML lib
 
-优势在于有丰富的ML论坛，可以提供现成的算法。
+优势在于有丰富的ML论坛，可以提供简洁的API。
 
 
 
@@ -578,32 +687,6 @@ FlinkML 基于Filnk平台的机器学习工具 使用Scala语言，但是FlinkML
 机器学习预测实验室地震
 
 
-
-会议任务分配记录:
-
-
-
-张翰林：找可以使CS CAD图背景变白的源代码。
-
-
-
-CS 胡永亮  王凯路：预警界面配色 ，预警界面的文字对话框，CAD图的白色显示，预警算法（胡），时间序列预测的现有框架
-
-左侧：短期预测                                                              右侧：中长期预测，时间次数 、能量、B值、矩张量 、能量频次比、震级 
-
-预测数据库的列起始时间终止时间 三个点的平面坐标 能量 震级 ，  综合指数法左侧 or 右侧 待定。
-
-
-
-王智涵 郑吉源：
-
-3.0继续完善。
-
-
-
-于海友：
-
-对接程序确认。
 
 
 

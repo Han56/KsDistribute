@@ -16,8 +16,8 @@ public class ExceptoinalFunc implements ExceptionalImp {
     }
 
     @Override
-    public void tailOfflineProcess() {
-
+    public boolean tailOfflineProcess(int by,int channelNums) {
+        return false;
     }
 
     @Override

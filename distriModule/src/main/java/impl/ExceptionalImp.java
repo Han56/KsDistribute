@@ -12,7 +12,7 @@ public interface ExceptionalImp {
     String formerDate(String segDate,int timeCount);
 
     //读取文件到末尾的操作
-    void tailOfflineProcess();
+    boolean tailOfflineProcess(int by,int channelNums);
 
     //压力值处理，当出现高电平向低电平过度时，认为是一秒的结束
     boolean voltProcessing(short voltValue,int loopCount);

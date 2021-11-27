@@ -70,6 +70,11 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
 
     @Test
     public void testReadHFHead() throws IOException, InterruptedException, ParseException {
+
+        /*
+        * 读取文件中一行数据，将其塞进List容器中
+        * */
+
         filesPath.add("hdfs://hadoop101:8020/hy_history_data/September/S/Test_190925110520.HFMED");
         filesPath.add("hdfs://hadoop101:8020/hy_history_data/September/Z/Test_190925103745.HFMED");
         filesPath.add("hdfs://hadoop101:8020/hy_history_data/September/U/Test_190925105915.HFMED");
@@ -95,16 +100,15 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
             System.out.println(JSON.toJSONString(channelInfos));
             HfmedSegmentHead hfmedSegmentHead = null;
             DataElement resData;
-            int by=-1;
-            boolean fileIsOver = false;
             loopCount = 0;
             //读数据段头和数据段
             while (true){
-                /*
-                 * 读之前需要判断是否到达了末尾
-                 * */
+
                 byte[] preRead = new byte[4];
                 fsDataInputStream.read(preRead);
+                /*
+                 * 判断是否到达了文件末尾
+                 * */
                 byte[] featureCode = {preRead[0],preRead[1],preRead[2],preRead[3]};
                 String isHFME = new String(featureCode);
                 System.out.println("isHFME?  "+isHFME);
@@ -118,7 +122,7 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
                      * */
                     hfmedSegmentHead=getDataHeadInfoByFile(fsDataInputStream,preRead, resHead.getChannelOnNum());
                     //方便调试，遇到特征码停一秒
-                    Thread.sleep(2000);
+                    Thread.sleep(500);
                 }else {
                     if (isVoltProcess){
                         loopCount=0;
@@ -145,15 +149,6 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
             }
             fsDataInputStream.close();
         }
-
-    }
-
-    /*
-    * 打印文件 测试使用
-    * */
-    public static void printByteFile(int skipLength,FSDataInputStream fsDataInputStream) throws IOException {
-        byte[] testPrint = new byte[skipLength];
-        int l=fsDataInputStream.read(testPrint);
     }
 
     /*
@@ -164,7 +159,7 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
 
         byte[] tempByte = new byte[186];
 
-        int byteLenght = fsDataInputStream.read(tempByte);
+        fsDataInputStream.read(tempByte);
         /*
          * 数据赋值
          * */
@@ -271,7 +266,7 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
         // 将读到的通道信息放到二维的数组中
         for (int i=0;i<channelOnNum;i++){
             byte[] sensorArray = new byte[14];
-            int byteArrayLength = fsDataInputStream.read(sensorArray);
+            fsDataInputStream.read(sensorArray);
             //获取字节序列
             byte[] chNoByte = FindByte.searchByteSeq(sensorArray, 0, 1);
             byte[] chNameByte = FindByte.searchByteSeq(sensorArray, 2, 5);
@@ -414,12 +409,12 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
         }
         if (date == null)
             return "";
-        System.out.println("front:" + format.format(date)); //显示输入的日期
+        //System.out.println("front:" + format.format(date)); //显示输入的日期
         Calendar cal = Calendar.getInstance();
         cal.setTime(date);
         cal.add(Calendar.SECOND, timeCount);// 24小时制
         date = cal.getTime();
-        System.out.println("after:" + format.format(date));  //显示更新后的日期
+        //System.out.println("after:" + format.format(date));  //显示更新后的日期
         return format.format(date);
     }
 
@@ -428,8 +423,17 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
     * 一个文件读到末尾后，关闭数据流
     * */
     @Override
-    public void tailOfflineProcess() {
-
+    public boolean tailOfflineProcess(int by,int channelNums) {
+        if (channelNums==0)
+            return false;
+        if (by==-1)
+            return true;
+        if (by==4)
+            return false;
+        else {
+            int byteNums = channelNums*2;
+            return by < byteNums;
+        }
     }
 
     /*
