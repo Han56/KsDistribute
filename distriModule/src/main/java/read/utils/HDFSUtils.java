@@ -35,9 +35,11 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
     private static FileSystem fileSystem;
 
     boolean isBroken = false;
+    boolean isVoltProcess = false;
     boolean flag1 = false;
     boolean flag2 = false;
     public int timeCount = 0;
+    int loopCount = 0;
 
     /*
     * 测试数据
@@ -95,7 +97,7 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
             DataElement resData;
             int by=-1;
             boolean fileIsOver = false;
-            int loopCount = 0;
+            loopCount = 0;
             //读数据段头和数据段
             while (true){
                 /*
@@ -108,6 +110,7 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
                 System.out.println("isHFME?  "+isHFME);
                 if (isHFME.equals("HFME")){
                     loopCount=0;
+                    timeCount=0;
                     //读数据段头
                     /*
                      * 如果时间等于 每一组文件 的起点时间则开始读取，否则 continue
@@ -116,30 +119,29 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
                     hfmedSegmentHead=getDataHeadInfoByFile(fsDataInputStream,preRead, resHead.getChannelOnNum());
                     //方便调试，遇到特征码停一秒
                     Thread.sleep(2000);
-                }
-                //如果段头时间小于winStart:只向下读，不存储
-                if (!dateUtils.segTimeCompareToWinStartTime(hfmedSegmentHead.getSysTime(),winStart)){
-                    getDataInfoByFile(fsDataInputStream,preRead, resHead.getChannelOnNum(), loopCount);
-                    System.out.println("非窗口内数据，仅读取不存储");
-                    loopCount++;
-                }
-                //如果段头时间大于winEnd 可以结束了
-                if (dateUtils.segTimeCompareToWinEndTime(hfmedSegmentHead.getSysTime(),winEnd)){
-                    Thread.sleep(2000);
-                    System.out.println("到达窗口末端，换下一个文件");
-                    break;
-                }
-                //如果段头时间大于/等于 winStart 可以读取
-                if (dateUtils.segTimeCompareToWinStartTime(hfmedSegmentHead.getSysTime(),winStart)){
-                    resData = getDataInfoByFile(fsDataInputStream,preRead, resHead.getChannelOnNum(), loopCount);
-                    loopCount++;
-                    if (resData==null){
-                        System.out.println("电压缺失，一秒数据已结束，");
-                        continue;
+                }else {
+                    if (isVoltProcess){
+                        loopCount=0;
+                        isVoltProcess=false;
                     }
-                    //存储resData 进容器 等待持久化
-                    System.out.println("合法数据，存储"+loopCount);
+                    loopCount++;
+                    resData = getDataInfoByFile(fsDataInputStream,preRead, resHead.getChannelOnNum(), loopCount);
+                    String formerDateStr = formerDate(hfmedSegmentHead.getSysTime(),timeCount);
+                    resData.setDataCalendar(formerDateStr);
+                    /*
+                    * 如果该段时间小于窗口起点，则跳过不存储
+                    * 如果该段时间大于窗口起点，存储
+                    * 如果该段时间大于窗口结点，break
+                    * */
+                    if (dateUtils.segTimeCompareToWinStartTime(formerDateStr,winStart))
+                        System.out.println("数据合法，存储");
+                    if (dateUtils.segTimeCompareToWinEndTime(formerDateStr,winEnd)){
+                        System.out.println("该文件结束，break");
+                        break;
+                    }
+                    System.out.println(JSON.toJSONString(resData));
                 }
+
             }
             fsDataInputStream.close();
         }
@@ -385,10 +387,9 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
             return null;
         }
         //高低电平判断是否一秒结束
-        if (voltProcessing(volt,loopCount))
-            return null;
-        //打印测试
-        System.out.println(JSON.toJSONString(dataElement));
+        if (voltProcessing(volt,loopCount)){
+            isVoltProcess = true;
+        }
         return dataElement;
     }
 
