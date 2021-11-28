@@ -14,9 +14,7 @@ import org.junit.Before;
 import org.junit.Test;
 import read.Parameters;
 
-import java.io.ByteArrayInputStream;
-import java.io.DataInputStream;
-import java.io.IOException;
+import java.io.*;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.text.ParseException;
@@ -70,15 +68,20 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
     public void testReadHFHead() throws IOException, InterruptedException, ParseException {
 
         /*
-        * 读取文件中一行数据，将其塞进List容器中
+        * 读取文件中一行数据，分割空格将其塞进List容器中
         * */
-
-        filesPath.add("hdfs://hadoop101:8020/hy_history_data/September/S/Test_190925110520.HFMED");
-        filesPath.add("hdfs://hadoop101:8020/hy_history_data/September/Z/Test_190925103745.HFMED");
-        filesPath.add("hdfs://hadoop101:8020/hy_history_data/September/U/Test_190925105915.HFMED");
-        filesPath.add("hdfs://hadoop101:8020/hy_history_data/September/V/Test_190925100949.HFMED");
-        filesPath.add("hdfs://hadoop101:8020/hy_history_data/September/Y/Test_190925101650.HFMED");
-        filesPath.add("hdfs://hadoop101:8020/hy_history_data/September/T/Test_190925104506.HFMED");
+        BufferedReader reader = new BufferedReader(new InputStreamReader
+                (fileSystem.open(new Path("hdfs://hadoop101:8020/hy_history_data/algin_group/6AlgrithmAlginRes.txt")))
+        );
+        String line;
+        while ((line =reader.readLine())!=null){
+            String[] s = line.split(" ");
+            for (String s1:s){
+                System.out.println(s1);
+                filesPath.add(s1);
+            }
+        }
+        reader.close();
 
         DateUtils dateUtils = new DateUtils();
         List<String> startAndEndTime = dateUtils.getStartAndEndTime(filesPath);
