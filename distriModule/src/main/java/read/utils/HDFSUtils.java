@@ -46,8 +46,6 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
     * */
     List<String> filesPath = new ArrayList<>();
 
-    public HDFSUtils() throws IOException {
-    }
 
     @Before
     public void init() throws URISyntaxException,IOException,InterruptedException{
@@ -137,10 +135,13 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
                     * 如果该段时间大于窗口起点，存储
                     * 如果该段时间大于窗口结点，break
                     * */
-                    if (dateUtils.segTimeCompareToWinStartTime(formerDateStr,winStart))
+                    if (dateUtils.segTimeCompareToWinStartTime(formerDateStr,winStart)){
                         System.out.println("数据合法，存储");
+                    }
+
                     if (dateUtils.segTimeCompareToWinEndTime(formerDateStr,winEnd)){
                         System.out.println("该文件结束，break");
+                        Thread.sleep(2000);
                         break;
                     }
                     System.out.println(JSON.toJSONString(resData));

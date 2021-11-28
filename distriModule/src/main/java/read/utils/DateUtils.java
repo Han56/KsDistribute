@@ -91,7 +91,7 @@ public class DateUtils {
     }
 
     /*
-    * 数据段头时间与窗口起始时间比较方法
+    * 当前时间与窗口起始时间比较方法
     * */
     public boolean segTimeCompareToWinStartTime(String segDateStr,String winStartDateStr) throws ParseException {
         SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
@@ -101,13 +101,13 @@ public class DateUtils {
     }
 
     /*
-    * 数据段头时间与窗口结束时间比较方法
+    * 当前时间与窗口结束时间比较方法
     * */
     public boolean segTimeCompareToWinEndTime(String segDateStr,String winEndDateStr) throws ParseException {
         SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
         Date segDate = format.parse(segDateStr);
         Date winEndDate = format.parse(winEndDateStr);
-        return segDate.compareTo(winEndDate)>=0;
+        return segDate.compareTo(winEndDate) > 0;
     }
 
     @Test
