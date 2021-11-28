@@ -37,6 +37,10 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
     int loopCount = 0;
 
 
+    /*
+    * gitee github 同步测试
+    * */
+
     List<String> filesPath = new ArrayList<>();
 
 
