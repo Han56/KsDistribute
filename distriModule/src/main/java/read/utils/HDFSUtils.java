@@ -19,10 +19,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.List;
+import java.util.*;
 
 /**
  * @author han56
@@ -39,9 +36,7 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
     public int timeCount = 0;
     int loopCount = 0;
 
-    /*
-    * 测试数据
-    * */
+
     List<String> filesPath = new ArrayList<>();
 
 
@@ -68,90 +63,99 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
     public void testReadHFHead() throws IOException, InterruptedException, ParseException {
 
         /*
-        * 读取文件中一行数据，分割空格将其塞进List容器中
+        * 读取文件中一行数据，分割空格将其塞进Map<Integer,List<String>>容器中
         * */
         BufferedReader reader = new BufferedReader(new InputStreamReader
                 (fileSystem.open(new Path("hdfs://hadoop101:8020/hy_history_data/algin_group/6AlgrithmAlginRes.txt")))
         );
+        HashMap<Integer,List<String>> map = new HashMap<>();
         String line;
-        while ((line =reader.readLine())!=null){
+        int lineNum = 1;
+        while ((line = reader.readLine())!=null){
+            List<String> groupFilePath = new ArrayList<>();
             String[] s = line.split(" ");
             for (String s1:s){
                 System.out.println(s1);
-                filesPath.add(s1);
+                groupFilePath.add(s1);
             }
+            map.put(lineNum,groupFilePath);
+            lineNum++;
         }
         reader.close();
 
-        DateUtils dateUtils = new DateUtils();
-        List<String> startAndEndTime = dateUtils.getStartAndEndTime(filesPath);
-        System.out.println("window start:"+startAndEndTime.get(0)+"window end:"+startAndEndTime.get(1));
-        String winStart = startAndEndTime.get(0);String winEnd = startAndEndTime.get(1);
+        for (int i=1;i<= map.size();i++){
+            filesPath = map.get(i);
 
-        for (String path:filesPath){
-            System.out.println("开始读取文件："+path);
-            FSDataInputStream fsDataInputStream = fileSystem.open(
-                    new Path(path));
-            HDFSUtils utils = new HDFSUtils();
-            System.out.println("文件头输出测试：");
-            HFMEDHead resHead = utils.readFileHead(fsDataInputStream);
-            System.out.println(JSON.toJSONString(resHead));
-            System.out.println("通道信息输出测试：");
-            ChannelInfo[] channelInfos = utils.getChannelInfoByFile(fsDataInputStream,resHead.getChannelOnNum());
-            System.out.println(JSON.toJSONString(channelInfos));
-            HfmedSegmentHead hfmedSegmentHead = null;
-            DataElement resData;
-            loopCount = 0;
-            //读数据段头和数据段
-            while (true){
+            DateUtils dateUtils = new DateUtils();
+            List<String> startAndEndTime = dateUtils.getStartAndEndTime(filesPath);
+            //System.out.println("window start:"+startAndEndTime.get(0)+"window end:"+startAndEndTime.get(1));
+            String winStart = startAndEndTime.get(0);String winEnd = startAndEndTime.get(1);
 
-                byte[] preRead = new byte[4];
-                fsDataInputStream.read(preRead);
-                /*
-                 * 判断是否到达了文件末尾
-                 * */
-                byte[] featureCode = {preRead[0],preRead[1],preRead[2],preRead[3]};
-                String isHFME = new String(featureCode);
-                System.out.println("isHFME?  "+isHFME);
-                if (isHFME.equals("HFME")){
-                    loopCount=0;
-                    timeCount=0;
-                    //读数据段头
+            for (String path:filesPath){
+                System.out.println("开始读取文件："+path);
+                FSDataInputStream fsDataInputStream = fileSystem.open(
+                        new Path(path));
+                HDFSUtils utils = new HDFSUtils();
+                System.out.println("文件头输出测试：");
+                HFMEDHead resHead = utils.readFileHead(fsDataInputStream);
+                System.out.println(JSON.toJSONString(resHead));
+                System.out.println("通道信息输出测试：");
+                ChannelInfo[] channelInfos = utils.getChannelInfoByFile(fsDataInputStream,resHead.getChannelOnNum());
+                System.out.println(JSON.toJSONString(channelInfos));
+                HfmedSegmentHead hfmedSegmentHead = null;
+                DataElement resData;
+                loopCount = 0;
+                //读数据段头和数据段
+                while (true){
+
+                    byte[] preRead = new byte[4];
+                    fsDataInputStream.read(preRead);
                     /*
-                     * 如果时间等于 每一组文件 的起点时间则开始读取，否则 continue
-                     * 跳出循环条件：如果时间等于 每组文件的结束时间 则break while
+                     * 判断是否到达了文件末尾
                      * */
-                    hfmedSegmentHead=getDataHeadInfoByFile(fsDataInputStream,preRead, resHead.getChannelOnNum());
-                    //方便调试，遇到特征码停一秒
-                    Thread.sleep(500);
-                }else {
-                    if (isVoltProcess){
+                    byte[] featureCode = {preRead[0],preRead[1],preRead[2],preRead[3]};
+                    String isHFME = new String(featureCode);
+                    System.out.println("isHFME?  "+isHFME);
+                    if (isHFME.equals("HFME")){
                         loopCount=0;
-                        isVoltProcess=false;
-                    }
-                    loopCount++;
-                    resData = getDataInfoByFile(fsDataInputStream,preRead, resHead.getChannelOnNum(), loopCount);
-                    String formerDateStr = formerDate(hfmedSegmentHead.getSysTime(),timeCount);
-                    resData.setDataCalendar(formerDateStr);
-                    /*
-                    * 如果该段时间小于窗口起点，则跳过不存储
-                    * 如果该段时间大于窗口起点，存储
-                    * 如果该段时间大于窗口结点，break
-                    * */
-                    if (dateUtils.segTimeCompareToWinStartTime(formerDateStr,winStart)){
-                        System.out.println("数据合法，存储");
+                        timeCount=0;
+                        //读数据段头
+                        /*
+                         * 如果时间等于 每一组文件 的起点时间则开始读取，否则 continue
+                         * 跳出循环条件：如果时间等于 每组文件的结束时间 则break while
+                         * */
+                        hfmedSegmentHead=getDataHeadInfoByFile(fsDataInputStream,preRead, resHead.getChannelOnNum());
+                        //方便调试，遇到特征码停一秒
+                        Thread.sleep(500);
+                    }else {
+                        if (isVoltProcess){
+                            loopCount=0;
+                            isVoltProcess=false;
+                        }
+                        loopCount++;
+                        resData = getDataInfoByFile(fsDataInputStream,preRead, resHead.getChannelOnNum(), loopCount);
+                        String formerDateStr = formerDate(hfmedSegmentHead.getSysTime(),timeCount);
+                        resData.setDataCalendar(formerDateStr);
+                        /*
+                         * 如果该段时间小于窗口起点，则跳过不存储
+                         * 如果该段时间大于窗口起点，存储
+                         * 如果该段时间大于窗口结点，break
+                         * */
+                        if (dateUtils.segTimeCompareToWinStartTime(formerDateStr,winStart)){
+                            System.out.println("数据合法，存储");
+                        }
+
+                        if (dateUtils.segTimeCompareToWinEndTime(formerDateStr,winEnd)){
+                            System.out.println("该文件结束，break");
+                            Thread.sleep(2000);
+                            break;
+                        }
+                        System.out.println(JSON.toJSONString(resData));
                     }
 
-                    if (dateUtils.segTimeCompareToWinEndTime(formerDateStr,winEnd)){
-                        System.out.println("该文件结束，break");
-                        Thread.sleep(2000);
-                        break;
-                    }
-                    System.out.println(JSON.toJSONString(resData));
                 }
-
+                fsDataInputStream.close();
             }
-            fsDataInputStream.close();
         }
     }
 
