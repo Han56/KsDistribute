@@ -1,12 +1,10 @@
 package impl;
 
-import entity.ChannelInfo;
-import entity.DataElement;
-import entity.HFMEDHead;
-import entity.HfmedSegmentHead;
+import entity.*;
 import org.apache.hadoop.fs.FSDataInputStream;
 
 import java.io.IOException;
+import java.util.List;
 
 /**
  * @author han56
@@ -31,5 +29,8 @@ public interface ReadFileImpl {
     * 参数2：通道数
     * */
     DataElement getDataInfoByFile(FSDataInputStream fsDataInputStream,byte[] preRead,short channelOnNum,int loopCount) throws IOException;
+
+    //存储成csv接口
+    void saveCSV(List<VOEntityClass> list);
 
 }

@@ -581,47 +581,45 @@ unity 包中全部都是 bean 对象。对各种文件内容的数据模型定�
 
 所需要的数据格式：
 
-```json
-{
-    //一条数据段的数据
-    dataElement:{
-       amplitude:"26161251",
-       dataCalendar:"2019-09-25 10:41:49",
-       x1:"55",
-       x2:"4",
-       y1:"37",
-       y2:"11662",
-       z1:"187",
-       z2:"11615"
-    },
-    //数据段头
-    HfmedSegmentHead:{
-        ...
-    },
-    //文件头
-    HFMEDHead:{
-        ...
-    },
-    //通道信息
-    ChannelInfo:{
-        ...
-    },
-    //窗口起始时间
-    winStartDate:"2019-09-25 11:05:20",
-    //窗口结束时间
-    winEndDate:"2019-09-25 11:09:49",
-    //所属文件
-    fileName:"hdfs://hadoop101:8020/hy_history_data/September/S/Test_190925110520.HFMED",
-    //文件夹
-    folder:"S",
-    //表示第几组数据：根据映射文件的行数决定
-    dataGroup: "3"
-}
-```
+> ```json
+> {
+>     //一条数据段的数据
+>     dataElement:{
+>        amplitude:"26161251",
+>        dataCalendar:"2019-09-25 10:41:49",
+>        x1:"55",
+>        x2:"4",
+>        y1:"37",
+>        y2:"11662",
+>        z1:"187",
+>        z2:"11615"
+>     },
+>     //数据段头
+>     HfmedSegmentHead:{
+>         ...
+>     },
+>     //文件头
+>     HFMEDHead:{
+>         ...
+>     },
+>     //通道信息
+>     ChannelInfo:{
+>         ...
+>     },
+>     //窗口起始时间
+>     winStartDate:"2019-09-25 11:05:20",
+>     //窗口结束时间
+>     winEndDate:"2019-09-25 11:09:49",
+>     //所属文件
+>     fileName:"hdfs://hadoop101:8020/hy_history_data/September/S/Test_190925110520.HFMED",
+>     //表示第几组数据：根据映射文件的行数决定
+>     dataGroup: "3"
+> }
+> ```
 
 集中式处理的话存储在csv文件中
 
-
+读取信息与网络带宽有关
 
 ***存在哪？***这块应该为后来的计算部分做对应，使计算部分能够拿到合适的数据格式。
 

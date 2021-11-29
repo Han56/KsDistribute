@@ -1,10 +1,7 @@
 package read.utils;
 
 import com.alibaba.fastjson.JSON;
-import entity.ChannelInfo;
-import entity.DataElement;
-import entity.HFMEDHead;
-import entity.HfmedSegmentHead;
+import entity.*;
 import impl.ExceptionalImp;
 import impl.ReadFileImpl;
 import org.apache.hadoop.conf.Configuration;
@@ -13,6 +10,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import read.Parameters;
+import vo.DataIntegration;
 
 import java.io.*;
 import java.net.URI;
@@ -87,14 +85,14 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
         }
         reader.close();
 
+        DataIntegration dataIntegration = new DataIntegration();
+
         for (int i=1;i<= map.size();i++){
             filesPath = map.get(i);
-
             DateUtils dateUtils = new DateUtils();
             List<String> startAndEndTime = dateUtils.getStartAndEndTime(filesPath);
-            //System.out.println("window start:"+startAndEndTime.get(0)+"window end:"+startAndEndTime.get(1));
             String winStart = startAndEndTime.get(0);String winEnd = startAndEndTime.get(1);
-
+            List<VOEntityClass> voList = new ArrayList<>();
             for (String path:filesPath){
                 System.out.println("开始读取文件："+path);
                 FSDataInputStream fsDataInputStream = fileSystem.open(
@@ -107,11 +105,10 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
                 ChannelInfo[] channelInfos = utils.getChannelInfoByFile(fsDataInputStream,resHead.getChannelOnNum());
                 System.out.println(JSON.toJSONString(channelInfos));
                 HfmedSegmentHead hfmedSegmentHead = null;
-                DataElement resData;
                 loopCount = 0;
                 //读数据段头和数据段
                 while (true){
-
+                    DataElement resData ;
                     byte[] preRead = new byte[4];
                     fsDataInputStream.read(preRead);
                     /*
@@ -147,6 +144,12 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
                          * */
                         if (dateUtils.segTimeCompareToWinStartTime(formerDateStr,winStart)){
                             System.out.println("数据合法，存储");
+                            /*
+                             * 每轮循环 存储 voList 中
+                             * */
+                            VOEntityClass intergration = dataIntegration.intergration(
+                                    resData,hfmedSegmentHead,resHead,channelInfos[0],winStart,winEnd,path,i );
+                            voList.add(intergration);
                         }
 
                         if (dateUtils.segTimeCompareToWinEndTime(formerDateStr,winEnd)){
@@ -156,10 +159,11 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
                         }
                         System.out.println(JSON.toJSONString(resData));
                     }
-
                 }
                 fsDataInputStream.close();
             }
+            saveCSV(voList);
+            Thread.sleep(2000);
         }
     }
 
@@ -398,6 +402,79 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
             isVoltProcess = true;
         }
         return dataElement;
+    }
+
+
+    /*
+    * 存储CSV格式文件
+    * */
+    @Override
+    public void saveCSV(List<VOEntityClass> dataList){
+
+        FileOutputStream out = null;
+        OutputStreamWriter osw = null;
+        BufferedWriter bw = null;
+        try {
+            File finalCSVFile = new File("/data/files/DownLoads/test.csv");
+            out = new FileOutputStream(finalCSVFile);
+            osw = new OutputStreamWriter(out, "UTF-8");
+            // 手动加上BOM标识
+            osw.write(new String(new byte[] { (byte) 0xEF, (byte) 0xBB, (byte) 0xBF }));
+            bw = new BufferedWriter(osw);
+            /**
+             * 往CSV中写新数据
+             */
+/*            String title = "";
+            title = "姓名,性别,年龄,手机号码,住址";
+            bw.append(title).append("\r");*/
+
+            if (dataList != null && !dataList.isEmpty()) {
+                for (VOEntityClass voData : dataList) {
+                    bw.append(voData.getWinStartDate()).append(",");
+                    bw.append(voData.getFilePathName()).append(",");
+                    bw.append(String.valueOf(voData.getDataGroupNum())).append(",");
+
+                    //数据段信息
+                    bw.append(voData.getDataElement().getDataCalendar()).append(",");
+                    bw.append(String.valueOf(voData.getDataElement().getX1())).append(",");
+                    bw.append(String.valueOf(voData.getDataElement().getX2())).append(",");
+                    bw.append(String.valueOf(voData.getDataElement().getY1())).append(",");
+                    bw.append(String.valueOf(voData.getDataElement().getY2())).append(",");
+                    bw.append(String.valueOf(voData.getDataElement().getZ1())).append(",");
+                    bw.append(String.valueOf(voData.getDataElement().getZ2())).append(",");
+
+                    bw.append(voData.getWinEndDate());
+                    bw.append("\r");
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+
+            if (bw != null) {
+                try {
+                    bw.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            if (osw != null) {
+                try {
+                    osw.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            if (out != null) {
+                try {
+                    out.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+
+        }
+        System.out.println("第一组数据导出成功");
     }
 
     /*
