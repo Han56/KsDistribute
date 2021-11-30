@@ -92,8 +92,9 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
             DateUtils dateUtils = new DateUtils();
             List<String> startAndEndTime = dateUtils.getStartAndEndTime(filesPath);
             String winStart = startAndEndTime.get(0);String winEnd = startAndEndTime.get(1);
-            List<VOEntityClass> voList = new ArrayList<>();
+            String savePathName = "/data/files/DownLoads/results"+i+".csv";
             for (String path:filesPath){
+                List<VOEntityClass> voList = new ArrayList<>();
                 System.out.println("开始读取文件："+path);
                 FSDataInputStream fsDataInputStream = fileSystem.open(
                         new Path(path));
@@ -127,7 +128,7 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
                          * */
                         hfmedSegmentHead=getDataHeadInfoByFile(fsDataInputStream,preRead, resHead.getChannelOnNum());
                         //方便调试，遇到特征码停一秒
-                        Thread.sleep(500);
+                        //Thread.sleep(500);
                     }else {
                         if (isVoltProcess){
                             loopCount=0;
@@ -143,7 +144,7 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
                          * 如果该段时间大于窗口结点，break
                          * */
                         if (dateUtils.segTimeCompareToWinStartTime(formerDateStr,winStart)){
-                            System.out.println("数据合法，存储");
+                            System.out.println("合法存储");
                             /*
                              * 每轮循环 存储 voList 中
                              * */
@@ -153,17 +154,15 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
                         }
 
                         if (dateUtils.segTimeCompareToWinEndTime(formerDateStr,winEnd)){
-                            System.out.println("该文件结束，break");
-                            Thread.sleep(2000);
+                            System.out.println("该文件读取操作结束，break");
                             break;
                         }
                         System.out.println(JSON.toJSONString(resData));
                     }
                 }
+                saveCSV(voList,savePathName);
                 fsDataInputStream.close();
             }
-            saveCSV(voList);
-            Thread.sleep(2000);
         }
     }
 
@@ -409,13 +408,13 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
     * 存储CSV格式文件
     * */
     @Override
-    public void saveCSV(List<VOEntityClass> dataList){
+    public void saveCSV(List<VOEntityClass> dataList,String savePath){
 
         FileOutputStream out = null;
         OutputStreamWriter osw = null;
         BufferedWriter bw = null;
         try {
-            File finalCSVFile = new File("/data/files/DownLoads/test.csv");
+            File finalCSVFile = new File(savePath);
             out = new FileOutputStream(finalCSVFile);
             osw = new OutputStreamWriter(out, "UTF-8");
             // 手动加上BOM标识
@@ -425,7 +424,7 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
              * 往CSV中写新数据
              */
 /*            String title = "";
-            title = "姓名,性别,年龄,手机号码,住址";
+            title = "winStartDate,,,,winEndDate";
             bw.append(title).append("\r");*/
 
             if (dataList != null && !dataList.isEmpty()) {

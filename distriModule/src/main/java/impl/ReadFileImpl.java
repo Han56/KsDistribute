@@ -31,6 +31,6 @@ public interface ReadFileImpl {
     DataElement getDataInfoByFile(FSDataInputStream fsDataInputStream,byte[] preRead,short channelOnNum,int loopCount) throws IOException;
 
     //存储成csv接口
-    void saveCSV(List<VOEntityClass> list);
+    void saveCSV(List<VOEntityClass> list,String savePath);
 
 }
