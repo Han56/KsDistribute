@@ -10,11 +10,11 @@ public class VOEntityClass {
 
     private DataElement dataElement;
 
-    private HfmedSegmentHead hfmedSegmentHead;
+/*    private HfmedSegmentHead hfmedSegmentHead;
 
     private HFMEDHead hfmedHead;
 
-    private ChannelInfo channelInfo;
+    private ChannelInfo channelInfo;*/
 
     private String winStartDate;
 
@@ -32,7 +32,7 @@ public class VOEntityClass {
         this.dataElement = dataElement;
     }
 
-    public HfmedSegmentHead getHfmedSegmentHead() {
+/*    public HfmedSegmentHead getHfmedSegmentHead() {
         return hfmedSegmentHead;
     }
 
@@ -54,7 +54,7 @@ public class VOEntityClass {
 
     public void setChannelInfo(ChannelInfo channelInfo) {
         this.channelInfo = channelInfo;
-    }
+    }*/
 
     public String getWinStartDate() {
         return winStartDate;

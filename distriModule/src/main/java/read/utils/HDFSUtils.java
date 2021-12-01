@@ -1,6 +1,5 @@
 package read.utils;
 
-import com.alibaba.fastjson.JSON;
 import entity.*;
 import impl.ExceptionalImp;
 import impl.ReadFileImpl;
@@ -42,6 +41,7 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
     List<String> filesPath = new ArrayList<>();
 
 
+
     @Before
     public void init() throws URISyntaxException,IOException,InterruptedException{
         // 连接集群 nn 地址
@@ -62,7 +62,7 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
     }
 
     @Test
-    public void testReadHFHead() throws IOException, InterruptedException, ParseException {
+    public void testReadHFHead() throws IOException, ParseException, InterruptedException {
 
         /*
         * 读取文件中一行数据，分割空格将其塞进Map<Integer,List<String>>容器中
@@ -76,10 +76,7 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
         while ((line = reader.readLine())!=null){
             List<String> groupFilePath = new ArrayList<>();
             String[] s = line.split(" ");
-            for (String s1:s){
-                System.out.println(s1);
-                groupFilePath.add(s1);
-            }
+            Collections.addAll(groupFilePath, s);
             map.put(lineNum,groupFilePath);
             lineNum++;
         }
@@ -92,19 +89,20 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
             DateUtils dateUtils = new DateUtils();
             List<String> startAndEndTime = dateUtils.getStartAndEndTime(filesPath);
             String winStart = startAndEndTime.get(0);String winEnd = startAndEndTime.get(1);
-            String savePathName = "/data/files/DownLoads/results"+i+".csv";
+            List<VOEntityClass> voList = new LinkedList<>();
+            String savePathDir = "/data/files/DownLoads/KsDisOut/group"+i+"/";
             for (String path:filesPath){
-                List<VOEntityClass> voList = new ArrayList<>();
-                System.out.println("开始读取文件："+path);
+                String saveFileName = path.substring(55,67)+"res.txt";
+                //System.out.println("开始读取文件："+path);
                 FSDataInputStream fsDataInputStream = fileSystem.open(
                         new Path(path));
                 HDFSUtils utils = new HDFSUtils();
-                System.out.println("文件头输出测试：");
+                //System.out.println("文件头输出测试：");
                 HFMEDHead resHead = utils.readFileHead(fsDataInputStream);
-                System.out.println(JSON.toJSONString(resHead));
-                System.out.println("通道信息输出测试：");
+                //System.out.println(JSON.toJSONString(resHead));
+                //System.out.println("通道信息输出测试：");
                 ChannelInfo[] channelInfos = utils.getChannelInfoByFile(fsDataInputStream,resHead.getChannelOnNum());
-                System.out.println(JSON.toJSONString(channelInfos));
+                //System.out.println(JSON.toJSONString(channelInfos));
                 HfmedSegmentHead hfmedSegmentHead = null;
                 loopCount = 0;
                 //读数据段头和数据段
@@ -117,7 +115,7 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
                      * */
                     byte[] featureCode = {preRead[0],preRead[1],preRead[2],preRead[3]};
                     String isHFME = new String(featureCode);
-                    System.out.println("isHFME?  "+isHFME);
+                   // System.out.println("isHFME?  "+isHFME);
                     if (isHFME.equals("HFME")){
                         loopCount=0;
                         timeCount=0;
@@ -144,12 +142,12 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
                          * 如果该段时间大于窗口结点，break
                          * */
                         if (dateUtils.segTimeCompareToWinStartTime(formerDateStr,winStart)){
-                            System.out.println("合法存储");
+                            System.out.println("存");
                             /*
                              * 每轮循环 存储 voList 中
                              * */
                             VOEntityClass intergration = dataIntegration.intergration(
-                                    resData,hfmedSegmentHead,resHead,channelInfos[0],winStart,winEnd,path,i );
+                                    resData,winStart,winEnd,path,i );
                             voList.add(intergration);
                         }
 
@@ -157,10 +155,19 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
                             System.out.println("该文件读取操作结束，break");
                             break;
                         }
-                        System.out.println(JSON.toJSONString(resData));
+                       // System.out.println(JSON.toJSONString(resData));
                     }
                 }
-                saveCSV(voList,savePathName);
+                assert voList != null;
+                if (!voList.isEmpty())
+                   saveTxt(voList,savePathDir,saveFileName);
+                /*
+                * 存储完成之后释放内存
+                * voList = null 直接释放内存，而list.clear不会释放内存只是清空了内容
+                * */
+                System.out.println(path+"文件抽取信息数目"+voList.size());
+                voList=null;
+                Thread.sleep(2000);
                 fsDataInputStream.close();
             }
         }
@@ -341,7 +348,7 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
         hfmedSegmentHead.setFeatureCode(featureCodeStr);
         hfmedSegmentHead.setSysTime(segmentDateStr);
         //print test
-        System.out.println(JSON.toJSONString(hfmedSegmentHead));
+        //System.out.println(JSON.toJSONString(hfmedSegmentHead));
         return hfmedSegmentHead;
     }
 
@@ -474,6 +481,46 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
 
         }
         System.out.println("第一组数据导出成功");
+    }
+
+    @Override
+    public void saveTxt(List<VOEntityClass> list, String saveDirName,String fileName) throws IOException {
+
+        /*
+        * 首先创建文件夹
+        * */
+        File dir = new File(saveDirName);
+        System.out.println("文件夹创建成功? "+dir.mkdirs());
+
+        /*
+        * 拼接字符串
+        * */
+        String sumPathName = saveDirName+fileName;
+
+        File file = new File(sumPathName);
+        //创建文件
+        FileWriter fileWriter = new FileWriter(file);
+
+        for (VOEntityClass voEntityClass:list){
+            //写入该文件组起始时间
+            fileWriter.write(voEntityClass.getWinStartDate());
+            fileWriter.write(" ");
+            //写入文件的hdfs路径
+            fileWriter.write(voEntityClass.getFilePathName());
+            fileWriter.write(" ");
+            //写入这是第几个文件对齐组
+            fileWriter.write(voEntityClass.getDataGroupNum().toString());
+            fileWriter.write(" ");
+            //写入 Data x1 x2 y1 y2 z1 z2
+            fileWriter.write(voEntityClass.getDataElement().toString());
+            fileWriter.write(" ");
+            fileWriter.write(voEntityClass.getWinEndDate());
+            fileWriter.write("\n");
+        }
+        System.out.println(fileName+" 读取结果存储完成");
+        fileWriter.flush();
+        fileWriter.close();
+
     }
 
     /*

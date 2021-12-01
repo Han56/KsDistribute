@@ -10,17 +10,16 @@ import entity.*;
  */
 public class DataIntegration {
 
-    public VOEntityClass intergration(DataElement dataElement, HfmedSegmentHead hfmedSegmentHead, HFMEDHead hfmedHead,
-                                      ChannelInfo channelInfo,String winStartDate,String winEndDate,String fileName,int dataGruopNum){
+    public VOEntityClass intergration(DataElement dataElement,String winStartDate,String winEndDate,String fileName,int dataGruopNum){
         VOEntityClass voEntityClass = new VOEntityClass();
 
         voEntityClass.setDataElement(dataElement);
-        voEntityClass.setChannelInfo(channelInfo);
+        //voEntityClass.setChannelInfo(channelInfo);
         voEntityClass.setDataGroupNum(dataGruopNum);
         voEntityClass.setFilePathName(fileName);
-        voEntityClass.setHfmedHead(hfmedHead);
+        //voEntityClass.setHfmedHead(hfmedHead);
         voEntityClass.setWinEndDate(winEndDate);
-        voEntityClass.setHfmedSegmentHead(hfmedSegmentHead);
+        //voEntityClass.setHfmedSegmentHead(hfmedSegmentHead);
         voEntityClass.setWinStartDate(winStartDate);
 
         return voEntityClass;

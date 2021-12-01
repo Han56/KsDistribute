@@ -33,4 +33,7 @@ public interface ReadFileImpl {
     //存储成csv接口
     void saveCSV(List<VOEntityClass> list,String savePath);
 
+    //存储txt文件接口
+    void saveTxt(List<VOEntityClass> list,String saveDirPath,String saveFileName) throws IOException;
+
 }
