@@ -18,6 +18,23 @@
                     <target>8</target>
                 </configuration>
             </plugin>
+            <plugin>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <configuration>
+                    <descriptorRefs>
+                        <descriptorRef>jar-with-dependencies</descriptorRef>
+                    </descriptorRefs>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>make-assembly</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
     <modules>
@@ -29,16 +46,31 @@
             <artifactId>hadoop-client</artifactId>
             <version>3.1.3</version>
         </dependency>
-
-        <dependency>
-            <groupId>com.opencsv</groupId>
-            <artifactId>opencsv</artifactId>
-            <version>3.10</version>
-        </dependency>
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-auth</artifactId>
             <version>3.1.3</version>
+        </dependency>
+        <!--    HBaseAPI 相关依赖    -->
+        <dependency>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>hbase-server</artifactId>
+            <version>2.3.6</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>hbase-client</artifactId>
+            <version>2.3.6</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>hbase-common</artifactId>
+            <version>2.3.6</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>hbase-mapreduce</artifactId>
+            <version>2.3.6</version>
         </dependency>
         <dependency>
             <groupId>junit</groupId>

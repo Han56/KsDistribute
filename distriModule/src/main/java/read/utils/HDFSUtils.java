@@ -84,14 +84,14 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
 
         DataIntegration dataIntegration = new DataIntegration();
 
-        for (int i=1;i<= map.size();i++){
+        for (int i=1;i<= 3;i++){
             filesPath = map.get(i);
             DateUtils dateUtils = new DateUtils();
             List<String> startAndEndTime = dateUtils.getStartAndEndTime(filesPath);
             String winStart = startAndEndTime.get(0);String winEnd = startAndEndTime.get(1);
-            List<VOEntityClass> voList = new LinkedList<>();
             String savePathDir = "/data/files/DownLoads/KsDisOut/group"+i+"/";
             for (String path:filesPath){
+                List<VOEntityClass> voList = new LinkedList<>();
                 String saveFileName = path.substring(55,67)+"res.txt";
                 //System.out.println("开始读取文件："+path);
                 FSDataInputStream fsDataInputStream = fileSystem.open(
@@ -142,7 +142,7 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
                          * 如果该段时间大于窗口结点，break
                          * */
                         if (dateUtils.segTimeCompareToWinStartTime(formerDateStr,winStart)){
-                            System.out.println("存");
+                            //System.out.println("存");
                             /*
                              * 每轮循环 存储 voList 中
                              * */
@@ -158,7 +158,6 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
                        // System.out.println(JSON.toJSONString(resData));
                     }
                 }
-                assert voList != null;
                 if (!voList.isEmpty())
                    saveTxt(voList,savePathDir,saveFileName);
                 /*
@@ -166,7 +165,6 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
                 * voList = null 直接释放内存，而list.clear不会释放内存只是清空了内容
                 * */
                 System.out.println(path+"文件抽取信息数目"+voList.size());
-                voList=null;
                 Thread.sleep(2000);
                 fsDataInputStream.close();
             }
@@ -501,7 +499,11 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
         //创建文件
         FileWriter fileWriter = new FileWriter(file);
 
+        int rowKey = 1;
         for (VOEntityClass voEntityClass:list){
+            //写入MR过程的rowKey
+            fileWriter.write(String.valueOf(rowKey));
+            fileWriter.write(" ");
             //写入该文件组起始时间
             fileWriter.write(voEntityClass.getWinStartDate());
             fileWriter.write(" ");
@@ -516,6 +518,7 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
             fileWriter.write(" ");
             fileWriter.write(voEntityClass.getWinEndDate());
             fileWriter.write("\n");
+            rowKey++;
         }
         System.out.println(fileName+" 读取结果存储完成");
         fileWriter.flush();
