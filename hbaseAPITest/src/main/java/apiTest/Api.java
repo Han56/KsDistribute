@@ -20,7 +20,7 @@ public class Api {
     public static Connection connection;
     static {
         configuration = HBaseConfiguration.create();
-        configuration.set("hbase.zookeeper.quorum","hadoop100,hadoop101,hadoop102");
+        configuration.set("hbase.zookeeper.quorum","hadoop101,hadoop102,hadoop103");
         configuration.set("hbase.zookeeper.property.clientPort","2181");
         try {
             connection = ConnectionFactory.createConnection(configuration);
@@ -36,6 +36,8 @@ public class Api {
         HBaseAdmin admin = (HBaseAdmin) connection.getAdmin();
         return admin.tableExists(TableName.valueOf(tableName));
     }
+
+
 
     /*
      *  创建数据表
@@ -186,10 +188,23 @@ public class Api {
     }
 
     public static void main(String[] args) throws IOException {
-        String tableName = "test";
-/*        System.out.println("====判断数据表是否存在====");
-        boolean f = isTableExits("student");
-        System.out.println(f);*/
+        System.out.println("====判断数据表是否存在====");
+        boolean f = isTableExits("test1");
+        System.out.println(f);
+
+        Table table = connection.getTable(TableName.valueOf("test1"));
+        Get get = new Get(Bytes.toBytes("rowkey1"));
+        get.readAllVersions();
+        get.addColumn(Bytes.toBytes("fam1"),Bytes.toBytes("name"));
+        Result result = table.get(get);
+        for (Cell cell: result.rawCells()){
+            System.out.println("行键:"+Bytes.toString(result.getRow()));
+            System.out.println("列族:"+Bytes.toString(CellUtil.cloneFamily(cell)));
+            System.out.println("列:"+Bytes.toString(CellUtil.cloneQualifier(cell)));
+            System.out.println("值:"+Bytes.toString(CellUtil.cloneValue(cell)));
+            System.out.println("时间戳:"+cell.getTimestamp());
+        }
+
 
 /*        System.out.println("====测试创建test表====");
         List<String> columnFamily = new LinkedList<>();
