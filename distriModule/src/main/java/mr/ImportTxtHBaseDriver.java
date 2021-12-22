@@ -9,7 +9,6 @@ import org.apache.hadoop.hbase.mapreduce.TableOutputFormat;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
-
 import java.io.IOException;
 
 /**
@@ -39,5 +38,4 @@ public class ImportTxtHBaseDriver {
         job.setOutputFormatClass(TableOutputFormat.class);
         job.waitForCompletion(true);
     }
-
 }

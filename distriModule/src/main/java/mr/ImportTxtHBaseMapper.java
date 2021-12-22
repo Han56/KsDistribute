@@ -25,14 +25,14 @@ public class ImportTxtHBaseMapper extends Mapper<LongWritable, Text,Text, Put> {
         String[] split = line.split(" ");
 
         //将组名作为rowKey
-        String rowKey = split[3];
+        String rowKey = split[0];
 
-        String time = split[10]+split[11];
+        String time = split[11]+split[12];
 
-        String x1 = split[4];String x2 = split[5];String y1 = split[6];String y2 = split[7];
-        String z1 = split[8];String z2 = split[9];
+        String x1 = split[5];String x2 = split[6];String y1 = split[7];String y2 = split[8];
+        String z1 = split[9];String z2 = split[10];
 
-        String panfu = split[2].substring(48,49);
+        String panfu = split[3].substring(48,49);
 
         Put put = new Put(Bytes.toBytes(rowKey));
         put.addColumn(Bytes.toBytes("time"),Bytes.toBytes("startTime"),Bytes.toBytes(time));

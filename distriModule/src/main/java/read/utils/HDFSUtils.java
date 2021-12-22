@@ -84,7 +84,7 @@ public class HDFSUtils implements ReadFileImpl, ExceptionalImp {
 
         DataIntegration dataIntegration = new DataIntegration();
 
-        for (int i=1;i<= 3;i++){
+        for (int i = 4;i <= 5;i++){
             filesPath = map.get(i);
             DateUtils dateUtils = new DateUtils();
             List<String> startAndEndTime = dateUtils.getStartAndEndTime(filesPath);

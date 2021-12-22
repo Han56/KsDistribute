@@ -4,7 +4,6 @@ import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.mapreduce.TableReducer;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
-
 import java.io.IOException;
 
 /**
