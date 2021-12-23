@@ -112,14 +112,14 @@ public class AlignFilePath {
 
         //获取所有文件信息
         for (String pathStr:fileParentPath){
-//            System.out.println("=====当前盘符："+pathStr.charAt(pathStr.length()-1)+"=====");
+            //System.out.println("=====当前盘符："+pathStr.charAt(pathStr.length()-1)+"=====");
             RemoteIterator<LocatedFileStatus> listFiles = fileSystem.listFiles
                     (new Path(pathStr),true);
             //遍历文件
             List<String> resultList = new ArrayList<>();
             while (listFiles.hasNext()){
                 LocatedFileStatus f = listFiles.next();
-//                System.out.println("======文件路径:"+f.getPath().toString()+"====");
+                //System.out.println("======文件路径:"+f.getPath().toString()+"====");
                 resultList.add(f.getPath().toString());
             }
             filePathSet.add(resultList);
@@ -244,7 +244,5 @@ public class AlignFilePath {
         }
         return true;
     }
-
-
 
 }

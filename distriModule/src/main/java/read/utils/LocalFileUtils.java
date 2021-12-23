@@ -37,7 +37,7 @@ public class LocalFileUtils {
 
         for (List<String> dataGroup:res){
             for (String path:dataGroup){
-                fileWriter.write(path);
+                fileWriter.write(path.substring(48,73));
                 fileWriter.write(" ");
             }
             fileWriter.write("\n");

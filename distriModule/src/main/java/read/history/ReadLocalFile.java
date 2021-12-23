@@ -4,23 +4,26 @@ import com.alibaba.fastjson.JSON;
 import entity.ChannelInfo;
 import entity.DataElement;
 import entity.HFMEDHead;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 import read.Parameters;
 import read.history.oldVersionCode.ReadDateFromHead;
 import read.history.oldVersionCode.ReadHfmedHead;
 import read.history.oldVersionCode.ReadSensorProperties;
 import read.utils.Byte2OtherDataFormat;
+import read.utils.DateUtils;
+import read.utils.HBaseApi;
 
-import java.io.BufferedInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
+import java.io.*;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.List;
+import java.util.*;
 
 /**
  * @author han56
@@ -59,23 +62,93 @@ public class ReadLocalFile {
     public boolean isBroken = false;
     /** 秒数计数器 , 每调用一次getData的时候 ，这个计数器就加一 ，表示加一秒 */
     public int timeCount = 0;
+    private static FileSystem fileSystem;
+
+    @Before
+    public void init() throws URISyntaxException,IOException,InterruptedException{
+        // 连接集群 nn 地址
+        URI uri = new URI("hdfs://hadoop101:8020");
+        //创建一个配置文件
+        Configuration configuration = new Configuration();
+        configuration.set("dfs.replication","1");
+
+        //用户
+        String user = "han56";
+        //获取客户端对象
+        fileSystem = FileSystem.get(uri,configuration,user);
+    }
+
+    @After
+    public void close() throws IOException{
+        fileSystem.close();
+    }
 
     @Test
-    public void readLocal() throws IOException, ParseException {
-        this.file = new File("/data/files/DownLoads/KsDisIn/Test_190925105915.HFMED");
-        HFMEDHead hfmedHead = new ReadHfmedHead().readHead(file);
-        this.settings(hfmedHead);
-        this.date = ReadDateFromHead.readDataSegMentHead(file);
-        ChannelInfo[] sensor = new ReadSensorProperties().readSensor(file);
-        this.chCahi = sensor[0].getChCali();
-        dataByte=new byte[this.bytenum];
-        this.buffered = new BufferedInputStream(new FileInputStream(file),bufferPoolSize);
-        buffered.read(new byte[Parameters.WenJianTou]);
-        System.out.println(JSON.toJSONString(hfmedHead));
-        System.out.println("日期信息:"+this.date);
-        System.out.println("单位信息:"+this.chCahi);
-        for (int i=0;i<200;i++)
-           readLocalDataOffLine();
+    public void readLocal() throws IOException, ParseException, InterruptedException {
+
+        /*
+         * 读取对齐分组文件中一行数据，分割空格将其塞进Map<Integer,List<String>>容器中
+         * */
+        BufferedReader reader = new BufferedReader(new InputStreamReader
+                (fileSystem.open(new Path("hdfs://hadoop101:8020/hy_history_data/algin_group/6AlgrithmAlginRes.txt")))
+        );
+        HashMap<Integer,List<String>> map = new HashMap<>();
+        String line;
+        int lineNum = 1;
+        while ((line = reader.readLine())!=null){
+            List<String> groupFilePath = new ArrayList<>();
+            String[] s = line.split(" ");
+            Collections.addAll(groupFilePath, s);
+            map.put(lineNum,groupFilePath);
+            lineNum++;
+        }
+        reader.close();
+
+        for (int i=1;i <= map.size();i++){
+            List<String> filesPath;
+            filesPath = map.get(i);
+            DateUtils dateUtils = new DateUtils();
+            List<String> startAndEndTime = dateUtils.getStartAndEndTime(filesPath);
+            String winStart = startAndEndTime.get(0);String winEnd = startAndEndTime.get(1);
+
+            for (String oneFile:filesPath){
+                //获取Family:盘符
+                String family = oneFile.substring(0,1);
+                /*
+                * 文件前缀，完整路径
+                * */
+                String prePathStr = "";
+                String totalFileStr = prePathStr+oneFile;
+                this.file = new File(totalFileStr);
+                HFMEDHead hfmedHead = new ReadHfmedHead().readHead(file);
+                this.settings(hfmedHead);
+                this.date = ReadDateFromHead.readDataSegMentHead(file);
+                ChannelInfo[] sensor = new ReadSensorProperties().readSensor(file);
+                this.chCahi = sensor[0].getChCali();
+                dataByte=new byte[this.bytenum];
+                this.buffered = new BufferedInputStream(new FileInputStream(file),bufferPoolSize);
+                buffered.read(new byte[Parameters.WenJianTou]);
+                /*
+                 * 边读边向HBase存
+                 * */
+                HBaseApi hBaseApi = new HBaseApi();
+                while (true){
+                    List<DataElement> dataElementList = readLocalDataOffLine();
+                    String dataInnerTime = dataElementList.get(0).getDataCalendar();
+                    if (!dateUtils.segTimeCompareToWinStartTime(dataInnerTime,winStart))
+                        continue;
+                    if (dateUtils.segTimeCompareToWinEndTime(dataInnerTime,winEnd)){
+                        System.out.println("读取结束，结束时间:"+dataInnerTime);
+                        break;
+                    }
+                    if (dateUtils.segTimeCompareToWinStartTime(dataInnerTime,winStart)){
+                        Thread.sleep(1000);
+                        System.out.println("存到HBase中");
+                        hBaseApi.addOneSecondRowData(family,dataElementList);
+                    }
+                }
+            }
+        }
     }
 
     public void settings(HFMEDHead hfmedHead){
@@ -101,11 +174,11 @@ public class ReadLocalFile {
     /*
     * 旧版本读取一秒钟的数据
     * */
-    public void readLocalDataOffLine() throws IOException {
+    public List<DataElement> readLocalDataOffLine() throws IOException {
         int by = -1;
         boolean fileIsOver = false;
         int loopCount = 0;
-        List<String> data = new ArrayList<>();
+        List<DataElement> data = new ArrayList<>();
         short volt=0;
         while (true){
             try {
@@ -123,13 +196,13 @@ public class ReadLocalFile {
                     }
                     else {
                         if (buffered.read(dataByte)==-1){
-                            return;
+                            return new ArrayList<>();
                         }
                     }
                 }
             }catch (IOException | InterruptedException e){
                 e.printStackTrace();
-                return;
+                return new ArrayList<>();
             }
             loopCount++;
             byte[] feature = {dataByte[0],dataByte[1],dataByte[2],dataByte[3]};
@@ -139,12 +212,13 @@ public class ReadLocalFile {
             }
             DataElement dataElement = this.getDataElementFromDataBytes();
             dataElement.setDataCalendar(this.formerDate());
-            System.out.println(JSON.toJSONString(dataElement));
-            data.add(dataElement.toString());
+            System.out.println(dataElement.getDataCalendar());
+            data.add(dataElement);
             volt=Byte2OtherDataFormat.byte2Short(dataByte[this.voltstart],dataByte[this.voltend]);
             if (this.voltProcessing(volt,loopCount))
                 break;
         }
+        return data;
     }
 
     public DataElement getDataElementFromDataBytes(){

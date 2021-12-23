@@ -25,8 +25,8 @@ public class DateUtils {
          * 获取文件路径中的起始时间与终止时间
          * */
         for (String str:filesPath){
-            String timeStr = "20"+str.substring(55,57)+"-"+str.substring(57,59)+"-"+str.substring(59,61)
-                    +" "+str.substring(61,63)+":"+str.substring(63,65)+":"+str.substring(65,67);
+            String timeStr = "20"+str.substring(7,9)+"-"+str.substring(9,11)+"-"+str.substring(11,13)
+                    +" "+str.substring(13,15)+":"+str.substring(15,17)+":"+str.substring(17,19);
             dateArray.add(timeStr);
         }
         System.out.println(dateArray);
@@ -94,7 +94,7 @@ public class DateUtils {
     * 当前时间与窗口起始时间比较方法
     * */
     public boolean segTimeCompareToWinStartTime(String segDateStr,String winStartDateStr) throws ParseException {
-        SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-ddHH:mm:ss");
         Date segDate = format.parse(segDateStr);
         Date winStartDate = format.parse(winStartDateStr);
         return segDate.compareTo(winStartDate) >= 0;
@@ -104,7 +104,7 @@ public class DateUtils {
     * 当前时间与窗口结束时间比较方法
     * */
     public boolean segTimeCompareToWinEndTime(String segDateStr,String winEndDateStr) throws ParseException {
-        SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-ddHH:mm:ss");
         Date segDate = format.parse(segDateStr);
         Date winEndDate = format.parse(winEndDateStr);
         return segDate.compareTo(winEndDate) > 0;
@@ -112,12 +112,12 @@ public class DateUtils {
 
     @Test
     public void testSegDateCompareFunc() throws ParseException {
-        String winStart = "2019-09-25 11:05:20";
-        String winEnd ="2019-09-25 11:09:49";
+        String winStart = "2019-09-2511:05:20";
+        String winEnd ="2019-09-2511:09:49";
         DateUtils dateUtils = new DateUtils();
-        boolean b = dateUtils.segTimeCompareToWinStartTime("2019-09-25 10:37:45", winStart);
+        boolean b = dateUtils.segTimeCompareToWinStartTime("2019-09-2510:05:20", winStart);
         System.out.println(b);
-        boolean b1 = dateUtils.segTimeCompareToWinEndTime("2019-9-25 11:10:15", winEnd);
+        boolean b1 = dateUtils.segTimeCompareToWinEndTime("2019-9-2511:09:50", winEnd);
         System.out.println(b1);
     }
 
