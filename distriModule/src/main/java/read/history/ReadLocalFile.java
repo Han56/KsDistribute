@@ -104,7 +104,7 @@ public class ReadLocalFile {
         }
         reader.close();
 
-        for (int i=1;i <= map.size();i++){
+        for (int i=1;i <= 1;i++){
             List<String> filesPath;
             filesPath = map.get(i);
             DateUtils dateUtils = new DateUtils();
@@ -117,7 +117,7 @@ public class ReadLocalFile {
                 /*
                 * 文件前缀，完整路径
                 * */
-                String prePathStr = "";
+                String prePathStr = "/run/media/han56/新加卷/红阳三矿/201909/";
                 String totalFileStr = prePathStr+oneFile;
                 this.file = new File(totalFileStr);
                 HFMEDHead hfmedHead = new ReadHfmedHead().readHead(file);
@@ -142,8 +142,7 @@ public class ReadLocalFile {
                         break;
                     }
                     if (dateUtils.segTimeCompareToWinStartTime(dataInnerTime,winStart)){
-                        Thread.sleep(1000);
-                        System.out.println("存到HBase中");
+                        System.out.println("rowkey:"+dataElementList.get(0).getDataCalendar()+"family:"+family+"总数据:"+dataElementList.size());
                         hBaseApi.addOneSecondRowData(family,dataElementList);
                     }
                 }
@@ -212,7 +211,6 @@ public class ReadLocalFile {
             }
             DataElement dataElement = this.getDataElementFromDataBytes();
             dataElement.setDataCalendar(this.formerDate());
-            System.out.println(dataElement.getDataCalendar());
             data.add(dataElement);
             volt=Byte2OtherDataFormat.byte2Short(dataByte[this.voltstart],dataByte[this.voltend]);
             if (this.voltProcessing(volt,loopCount))
