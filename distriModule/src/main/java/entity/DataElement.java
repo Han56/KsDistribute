@@ -2,6 +2,7 @@ package entity;
 
 import org.junit.Test;
 
+import java.io.Serializable;
 import java.text.SimpleDateFormat;
 
 /**
@@ -9,7 +10,7 @@ import java.text.SimpleDateFormat;
  * @description 功能描述
  * @create 2021/11/4 下午2:19
  */
-public class DataElement {
+public class DataElement implements Serializable {
 
     private short x1=0;
 
@@ -94,11 +95,11 @@ public class DataElement {
     * */
     @Override
     public String toString(){
-        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd  HH:mm:ss");
         return ( x1 + " " + y1 + " " + z1 + " "
-                + x2 + " " + y2 + " " + z2 + " "
-                + dataCalendar );
+                + x2 + " " + y2 + " " + z2 + " " );
     }
+
+
 
 
 }

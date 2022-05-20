@@ -4,10 +4,13 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.*;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.util.Bytes;
-
+import org.junit.Test;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * @author han56
@@ -18,21 +21,27 @@ public class Api {
 
     public static Configuration configuration;
     public static Connection connection;
+    public static CompletableFuture<AsyncConnection> asyncConnection;
     static {
         configuration = HBaseConfiguration.create();
         configuration.set("hbase.zookeeper.quorum","hadoop101,hadoop102,hadoop103");
         configuration.set("hbase.zookeeper.property.clientPort","2181");
         try {
             connection = ConnectionFactory.createConnection(configuration);
+            //创建异步HBase连接
+            asyncConnection = ConnectionFactory.createAsyncConnection(configuration);
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
+
+
     /*
      * 判断表名是否存在
      * */
     public static boolean isTableExits(String tableName) throws IOException {
+
         HBaseAdmin admin = (HBaseAdmin) connection.getAdmin();
         return admin.tableExists(TableName.valueOf(tableName));
     }
@@ -95,6 +104,8 @@ public class Api {
      * 获取全部数据
      * */
     public static void getAllRowsInfo(String tableName){
+        CompletableFuture<Result> asyncResult = new CompletableFuture<>();
+
         try {
             Table table = connection.getTable(TableName.valueOf(tableName));
             //实例化扫描region的scan对象
@@ -125,6 +136,7 @@ public class Api {
         try {
             Table table = connection.getTable(TableName.valueOf(tableName));
             Get get = new Get(Bytes.toBytes(rowKey));
+            get.readAllVersions();
             Result result = table.get(get);
             for (Cell cell:result.rawCells()){
                 //得到rowKey
@@ -168,6 +180,84 @@ public class Api {
         }
     }
 
+    @Test
+    public void testSystemTmp(){
+        System.out.println(System.currentTimeMillis());
+        System.out.println(System.currentTimeMillis()+1);
+    }
+
+    /*
+    * 单线程插入多行数据 Put[]
+    * */
+    public static void putRowsData(int start,int end){
+        try {
+            Table table = connection.getTable(TableName.valueOf("test1"));
+            String rowKey = "rowkey3";
+            List<Put> putList = new ArrayList<>();
+            Put put = new Put(Bytes.toBytes(rowKey));
+//            for(int j=0;j<50;j++){
+//
+//            }
+            //*(j+1)
+            for (int i=start;i<end;i++){
+                put.addColumn(Bytes.toBytes("fam1"),Bytes.toBytes("name"),System.currentTimeMillis(),Bytes.toBytes("branch"+i));
+                put.addColumn(Bytes.toBytes("fam1"),Bytes.toBytes("age"),System.currentTimeMillis(),Bytes.toBytes(String.valueOf(i)));
+                putList.add(put);
+                Thread.sleep(1);
+            }
+            table.put(putList);
+            putList.clear();
+
+            table.close();
+            System.out.println("批量插入成功");
+        } catch (IOException | InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+
+    /*
+    * 多线程并行插入多行数据
+    * */
+    public static void insertMultiProcess() throws  InterruptedException {
+        //start stop 用于程序计时
+        long start = System.currentTimeMillis();
+        Thread t1 = new Thread(){
+            public void run(){
+                try {
+                    putRowsData(0,200);
+                }catch (Exception e){
+                    e.printStackTrace();
+                }
+            }
+        };
+        Thread t2 = new Thread(){
+            public void run(){
+                try {
+                    putRowsData(200,400);
+                }catch (Exception e){
+                    e.printStackTrace();
+                }
+            }
+        };
+        Thread t3 = new Thread(){
+            public void run(){
+                try {
+                    putRowsData(400,600);
+                }catch (Exception e){
+                    e.printStackTrace();
+                }
+            }
+        };
+        t1.start();
+        t2.start();
+        t3.start();
+        t1.join();
+        t2.join();
+        t3.join();
+        System.out.print("用时:");
+        System.out.println(System.currentTimeMillis()-start);
+    }
+
     /*
      * 删除多行数据
      * */
@@ -187,26 +277,30 @@ public class Api {
         }
     }
 
-    public static void main(String[] args) throws IOException {
-        System.out.println("====判断数据表是否存在====");
-        boolean f = isTableExits("test1");
-        System.out.println(f);
+    public static void main(String[] args) throws IOException, InterruptedException {
+//        System.out.println("====判断数据表是否存在====");
+//        boolean f = isTableExits("test1");
+//        System.out.println(f);
 
-        Table table = connection.getTable(TableName.valueOf("test1"));
-        Get get = new Get(Bytes.toBytes("rowkey1"));
+        /*
+        * 查看插入数据
+        * */
+        Table table = connection.getTable(TableName.valueOf("dq"));
+        Get get = new Get(Bytes.toBytes("2019-09-2511:05:20"));
         get.readAllVersions();
-        get.addColumn(Bytes.toBytes("fam1"),Bytes.toBytes("name"));
+        get.addColumn(Bytes.toBytes("info"),Bytes.toBytes("V"));
         Result result = table.get(get);
+        int sum = 0;
         for (Cell cell: result.rawCells()){
             System.out.println("行键:"+Bytes.toString(result.getRow()));
             System.out.println("列族:"+Bytes.toString(CellUtil.cloneFamily(cell)));
             System.out.println("列:"+Bytes.toString(CellUtil.cloneQualifier(cell)));
             System.out.println("值:"+Bytes.toString(CellUtil.cloneValue(cell)));
             System.out.println("时间戳:"+cell.getTimestamp());
+            System.out.println("版本数："+sum++);
         }
 
-
-/*        System.out.println("====测试创建test表====");
+/*      System.out.println("====测试创建test表====");
         List<String> columnFamily = new LinkedList<>();
         String column_fam_one = "personal_info";
         columnFamily.add(column_fam_one);

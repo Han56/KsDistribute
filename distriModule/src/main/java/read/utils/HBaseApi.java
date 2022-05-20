@@ -9,6 +9,8 @@ import org.apache.hadoop.hbase.client.ConnectionFactory;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.util.Bytes;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -34,29 +36,23 @@ public class HBaseApi {
         }
     }
 
+    //定义日志
+    private Logger logger = LoggerFactory.getLogger(HBaseApi.class);
     /*
     * insert one second data to HBase Table
     * */
-    public void addOneSecondRowData(String columnFam, List<DataElement> dataElementList){
+    public void addOneSecondRowData(String qualify, List<DataElement> dataElementList,Table table){
         try {
-            Table table = connection.getTable(TableName.valueOf("disquake"));
+            //Table table = connection.getTable(TableName.valueOf("dq"));
             String rowKey = dataElementList.get(0).getDataCalendar();
-            List<Put> putList = new ArrayList<>();
+            //List<Put> putList = new ArrayList<>();
             Put put = new Put(Bytes.toBytes(rowKey));
             for (DataElement dataElement:dataElementList){
-                put.addColumn(Bytes.toBytes(columnFam),Bytes.toBytes("x1"),System.currentTimeMillis(),Bytes.toBytes(String.valueOf(dataElement.getX1())));
-                put.addColumn(Bytes.toBytes(columnFam),Bytes.toBytes("y1"),System.currentTimeMillis(),Bytes.toBytes(String.valueOf(dataElement.getY1())));
-                put.addColumn(Bytes.toBytes(columnFam),Bytes.toBytes("z1"),System.currentTimeMillis(),Bytes.toBytes(String.valueOf(dataElement.getZ1())));
-                put.addColumn(Bytes.toBytes(columnFam),Bytes.toBytes("x2"),System.currentTimeMillis(),Bytes.toBytes(String.valueOf(dataElement.getX2())));
-                put.addColumn(Bytes.toBytes(columnFam),Bytes.toBytes("y2"),System.currentTimeMillis(),Bytes.toBytes(String.valueOf(dataElement.getY2())));
-                put.addColumn(Bytes.toBytes(columnFam),Bytes.toBytes("z2"),System.currentTimeMillis(),Bytes.toBytes(String.valueOf(dataElement.getZ2())));
-                putList.add(put);
-                Thread.sleep(1);
+                put.addColumn(Bytes.toBytes("info"),Bytes.toBytes(qualify),System.currentTimeMillis()+1,Bytes.toBytes(String.valueOf(dataElement)));
+                table.put(put);
             }
-            table.put(putList);
-            table.close();
             System.out.println("插入一秒数据成功");
-        } catch (IOException | InterruptedException e) {
+        } catch (IOException e) {
             e.printStackTrace();
         }
     }

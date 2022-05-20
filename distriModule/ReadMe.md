@@ -1,40 +1,93 @@
-# 	                           KS后端分布式文档 # 
+# 	                            KS后端分布式文档 # 
 
 ## 环境及相关参数配置 ##
 
-基于 hadoop-3.1.3 、 hbase -2.3.6 、zookeeper-3.4.10、jdk1.8、Flink 1.10.1、
+各组件版本号： **hadoop-3.1.3 、 hbase -2.3.6 、zookeeper-3.4.10、jdk1.8**
 
 
 
-实验测试环境是由三台 CentOS 虚拟机搭建而成的完全分布式集群，采用局域网进行连接。
+实验测试环境是由**三台 CentOS 腾讯轻量云服务器搭建的完全分布式集群**。
+
+![](/data/files/杂项/研究生阶段/后台程序运行截图/搭建集群/三台云服务器真集群.png)
+
+|      | Hadoop101(Master)      | Hadoop102(slave1)             | Hadoop103(slave2)            |
+| ---- | ---------------------- | ----------------------------- | ---------------------------- |
+| HDFS | *NameNode* DataNode    | DataNode                      | *SecondaryNameNode* DataNode |
+| YRAN | NodeManager jobhistory | *ResourceManager* NodeManager | NodeManager                  |
 
 
 
-**虚拟机的配置如下：**
+## 整体思路 ##
 
-两台213监控台主机各 分配了 5g内存、4核以及400G硬盘空间，分别命名为 hadoop100和hadoop101。
+**目的：**筛选出历史波形文件中微震事件的前兆信息。
 
-ip地址为：192.168.1.128 以及 192.168.1.161
+**问题：**微震事件预测预警模型 
 
-一台个人笔记本虚拟主机，4核、5g以及200g硬盘空间，命名为hadoop102
+（1）基于历史数据构建分布式的决策树模型
 
-ip地址为：192.168.1.162。
+​          1.1 存储原始波形数据 以及 清洗过程  **着重看存储方面的创新点**（总结于HBase存储速度优化部分）
+
+​          1.2  指标的计算
+
+​          1.3  构建决策树    **决策树根节点选择的优化问题**
+
+（2）模型的实时更新：**机器学习（决策树）模型更新时刻的优化研究**
+
+​    
+
+与Grapth进行结合的研究查阅。
 
 
 
-## 程序设计思路 ##
+我的想法是  在大量的历史数据中，我们已经知道具体哪天发生了微震事件
 
-（1）数据预处理即对齐部分：
+假设 2月26日发生了事件，1月26日也发生了一次事件，那么这一个月之间的数据就是要重点关注的范围，
 
-利用mapreduce对现有的大数据量历史数据进行处理，将已经对齐的文件按照文件夹的形式分类存储在 hdfs 中，
 
-防治每次读程序都要重复之前的操作。
 
-但是由于目前实验环境的空间仅有 1T ，故仅仅能存储 个别月份作为测试。
+- 根据师兄的建议，可以将微震波判识计算公式里面的长短时域进行调整，比如减小长时窗来筛选出更多更小的事件。
+
+- 或者限制时间区域条件 ： 比如1月26日后一星期的所有数据+2月26日之前一星期的所有数据。
+
+
+
+
+拿到这些数据后干什么？
+
+可以通过相关计算公式计算出每个时间戳对应的微震属性（即前兆信息指标：B值 能量  危险事件数 震级连续大于1级次数  满足其中两个条件就会报警）
+
+寻找这段时间中 前兆信息指标数据 特别异常的区域并在数据库中做上标记。即作为本次微震事件的前兆信息。
+
+![](/data/files/杂项/研究生阶段/后台程序运行截图/计算模块/前兆信息HBase标记.png)
+
+
+
+其次，这是后续的计划，不在当前主要问题。
+
+假设我们现在已经拿到通过所有历史数据推断出来的前兆信息，可以将这些前兆信息的指标数值作为对未来事件预警的阈值，通过SparkML中的决策树+消息队列机制 向目前的系统中加入**实时预警推送机制**。（潜在的隐患在于原始文件过大，内存可能撑不住）
+
+具体的流程图如下图所示：
+
+ ![](/data/files/杂项/研究生阶段/后台程序运行截图/计算模块/预警流程图.png)
+
+决策树逻辑简要模型如下所示：假设满足两个前兆数值条件就会报警
+
+![](/data/files/杂项/研究生阶段/后台程序运行截图/计算模块/微震预警决策树模型.png)
 
 
 
 ## 实现进度 ##
+
+### 系统功能模块图
+
+![](/data/files/杂项/研究生阶段/论文/大数据论文/汇报截图/系统功能模块图.png)
+
+### 系统架构图
+
+![](/data/files/杂项/研究生阶段/论文/大数据论文/汇报截图/系统架构图.png)
+
+
+
 
 ### 实验数据上传至 HDFS 
 
@@ -570,7 +623,7 @@ unity 包中全部都是 bean 对象。对各种文件内容的数据模型定�
 
   
 
-### 存储过程 ###
+### 存储过程——离线数据仓库 ###
 
 数据表结构：
 
@@ -585,14 +638,30 @@ disquake分布式HBase数据表最终结构：
 参考文章：
 
 ```
-https://mp.weixin.qq.com/s?__biz=Mzg3OTI1ODkzOQ==&mid=2247485840&idx=1&sn=48eb18b41c62c767c88722b36bf5eece&chksm=cf0675c4f871fcd27ad42e0e27e74359e7b3cd9e9279f4c08d90702811dd3070caa45d033706&token=1445788343&lang=zh_CN#rd
+https://mp.weixin.qq.com/s__biz=Mzg3OTI1ODkzOQ==&mid=2247485840&idx=1&sn=48eb18b41c62c767c88722b36bf5eece&chksm=cf0675c4f871fcd27ad42e0e27e74359e7b3cd9e9279f4c08d90702811dd3070caa45d033706&token=1445788343&lang=zh_CN#rd
 ```
 
 利用Versions的特性，使同一个RowKey下可以存储5000条数据，即一秒钟的数据，也可能是 5100 条数据每秒，将其设置为5150防治溢出。
 
-通过MapReduce对每一组的读取结果进行合并存储至HBase表中。
+时间为RowKey。
 
-时间为RowKey 
+![](/data/files/杂项/研究生阶段/后台程序运行截图/存储模块/虚拟机集群配置.png)
+
+**由于集群配置极低**，导致数据存储速度过慢，且已经将客户端的优化做了最大的努力，为了不影响后续的进度这一步只能暂时跳过。影响HBase写入性能的问题从宏观上来讲主要有三个方面：
+
+（1）服务端：主要是集群的物理配置。以当前的配置仅能一秒插入100条数据，这与大数据框架根本没啥关系了。16G内存左右的标准集群在客户端为多线程插入的条件下可以做到 1秒钟 数十万条。
+
+（2）客户端：插入的方式。
+
+（3）网络I/O以及磁盘I/O，这并不是最主要的。
+
+**客户端优化主要有三方面：**
+
+（1）【参考文献：4】将客户端的阻塞式写入改为非阻塞式写入，但是这样做的问题在于客户端能够将巨量的数据发给服务端，但是服务端无法写入。
+
+（2）客户端改为多线程批量插入，与（1）的问题一样，集群无法处理这么多数据。
+
+（3）MapReduce并行Put，但这需要大量存储空间存储解析之后的十进制数据做中间介质。
 
 
 
@@ -612,6 +681,14 @@ https://mp.weixin.qq.com/s?__biz=Mzg3OTI1ODkzOQ==&mid=2247485840&idx=1&sn=48eb18
 
 #### 计算模块的公式
 
+##### 前兆信息指标
+
+通过论文中总结的微震前兆的大致信息如下图所示：
+
+![](/data/files/杂项/研究生阶段/后台程序运行截图/计算模块/微震预测权值分析层次结构.png)
+
+
+
 ##### 微震波判识计算公式
 
 ![](/data/files/杂项/研究生阶段/后台程序运行截图/计算模块/微震波判识计算公式.png)
@@ -622,7 +699,7 @@ https://mp.weixin.qq.com/s?__biz=Mzg3OTI1ODkzOQ==&mid=2247485840&idx=1&sn=48eb18
 
 ![](/data/files/杂项/研究生阶段/后台程序运行截图/计算模块/测试数据选择20年一月份.png)
 
-可以看出红阳三矿2020一月份的事件偏多，所以以一月做实验数据。
+可以看出红阳三矿2020一月份的事件偏多，所以 以一月做实验数据。
 
 
 
@@ -633,6 +710,15 @@ https://mp.weixin.qq.com/s?__biz=Mzg3OTI1ODkzOQ==&mid=2247485840&idx=1&sn=48eb18
 ##### 微震震级计算公式
 
 ![](/data/files/杂项/研究生阶段/后台程序运行截图/计算模块/微震震级计算公式.png)
+
+微震活动性的判断并不能通过单一的某个微震事件来决定，井下复杂的环境下，单一的微震事件并不具有代表性，因此，微震参数统计规律也是建立在大量微震事件基础之上。在地震学上，常用的统计学参数有微震能量指数、视体积、施密特数、微震能量释放率、B值、视应力等。
+
+
+
+##### b值计算方法
+
+使用适用于分析小震活动性的最大似然法进行估算b值
+
 
 
 #### 技术框架的选择
@@ -669,40 +755,362 @@ FlinkML 基于Filnk平台的机器学习工具 使用Scala语言，但是FlinkML
 
 
 
-（2）Spark ML lib
+- [x] **（2）Spark ML lib**
 
-优势在于有丰富的ML论坛，可以提供简洁的API。
+优势在于有丰富的ML论坛，可以提供简洁的API。为了更好的让机器学习与大数据框架结合，最终选择使用Spark大数据框架。
+
+
+#### SparkML 决策树
+
+（1）准备工作
+
+安装Scala以及Spark本地版
+
+这里选择的版本是最新的：Spark 3.2 + Scala 2.13.1 
+
+![](/data/files/杂项/研究生阶段/后台程序运行截图/计算模块/Spark版本.png)
+
+![](/data/files/杂项/研究生阶段/后台程序运行截图/计算模块/Scala版本.png)
+
+解压到 /opt/module 文件夹下，命令：
+
+```shell
+sudo tar -zxvf /data/.../scala2.13.1或spark... -C /opt/module
+```
+
+（将解压后的Spark 文件夹改名为 spark-local，方便后续处理）
+
+```shell
+sudo mv /opt/module/spark2.13....  /opt/module/spark-local
+```
+
+配置Scala环境变量：
+
+![](/data/files/杂项/研究生阶段/后台程序运行截图/计算模块/配置Scala环境变量.png)
+
+```shell
+source /etc/profile      //命令行生效
+```
+
+启动 Spark 
+
+![](/data/files/杂项/研究生阶段/后台程序运行截图/计算模块/启动Spark.png)
+
+命令： bin/spark-shell
+
+可视化控制台：我们可以通过它来监测正在运行的程序健康状态。
+
+![](/data/files/杂项/研究生阶段/后台程序运行截图/计算模块/spark可视化控制台.png)
 
 
 
-#### 参考论文
+目前依据现有的数据进行实验，主要选中了以下几个指标，来源于上述图中的前兆信息指标。
+
+![](/data/files/杂项/研究生阶段/后台程序运行截图/计算模块/选中实验指标.png)
+
+由于当前的分布式集群HBase迫于性能压力无法存储大量数据，所以只能暂时手动模拟数据进行测试。
+
+思路分析：
+
+![](/data/files/杂项/研究生阶段/后台程序运行截图/计算模块/微震预警决策树模型.png)
+
+**对于这张决策树示意图可能会有疑问，为什么是这样的顺序 即如何选择Cart决策树根节点字段的问题？**
+
+我们的特征列往往由多个字段组成，特征列也就是后面决策树中的判定条件，那么每个节点中用于判定的字段的选择是如何决定的，这是值得研究的。
+
+**选择一个合理的根节点字段决策树的分类效果会非常好，即每个叶子节点的输出会比较纯净。纯净度越高即选择的根节点字段就越合理。纯净度 也就是 信息增益、信息增益率和 gini 指数**。由于信息增益与信息增益率都只能对离散型数据进行分类，这是一个明显的短板，所以Breiman等人在1984年提出了CART算法，该算法也称为分类回归树，它所使用的字段选择指标是 **gini 指数法**。这个算法在程序中是可以自动实现的，当然也可以手动计算。具体算法以及流程已总结博客（地址：https://mp.weixin.qq.com/s?__biz=Mzg3OTI1ODkzOQ==&mid=2247485824&idx=2&sn=bf8b14024ff563d4bc3ab05b3239b044&chksm=cf0675d4f871fcc2c4be21fb7b3d3b2f6f086fc8904bb3cb3b434c5fedc290f41dc8ef5f84ed&token=1468615983&lang=zh_CN#rd）
+
+
+
+数据准备：
+
+（1）命名 tree1.txt 即训练集
+
+字段说明：是否报警   总事件数  是否震级异常  是否B值异常  是否能量异常
+
+```
+1,6 1 1 0
+1,8 1 1 0
+0,3 1 1 1
+0,4 0 1 0
+0,5 0 0 0
+0,6 0 1 1
+1,7 1 0 1
+1,6 1 1 1
+1,5 1 0 0
+1,8 1 0 1
+```
+
+命名 tree2.txt 即测试集
+
+```
+0,3 1 1 0
+1,7 1 1 1
+1,9 1 1 0
+1,8 1 0 1
+0,2 0 0 1
+```
+
+
+
+demo代码记录：
+
+```scala
+import org.apache.spark.mllib.feature.HashingTF
+import org.apache.log4j.{Level,Logger}
+import org.apache.spark.mllib.linalg.Vectors
+import org.apache.spark.mllib.regression.LabeledPoint
+import org.apache.spark.mllib.tree.DecisionTree
+import org.apache.spark.mllib.util.MLUtils
+import org.apache.spark.{SparkConf,SparkContext}
+
+/**
+ * @description 功能描述
+ * @author han56
+ * @create 2021/12/27 上午9:03
+ */
+object Test {
+  def main(args: Array[String]): Unit = {
+    val conf = new SparkConf().setAppName("DecisionTree").setMaster("local")
+    val sc = new SparkContext(conf)
+    Logger.getRootLogger.setLevel(Level.WARN)
+
+    //训练数据
+    val data1 = sc.textFile("/data/files/sparkMl/tree1.txt")
+
+    //测试数据
+    val data2 = sc.textFile("/data/files/sparkMl/tree2.txt")
+
+    //转换向量
+    val tree1 = data1.map{ line=>
+      val  parts = line.split(',')
+      LabeledPoint(parts(0).toDouble,Vectors.dense(parts(1).split(' ').map(_.toDouble)))
+    }
+
+    val tree2 = data2.map{ line=>
+      val  parts = line.split(',')
+      LabeledPoint(parts(0).toDouble,Vectors.dense(parts(1).split(' ').map(_.toDouble)))
+    }
+
+    //赋值
+    val (trainningData,testData) = (tree1,tree2)
+
+    //分类
+    val numClasses = 2
+    val categoricalFeaturesInfo = Map[Int,Int]()
+    val impurity = "gini"
+
+    //最大深度
+    val maxDepth = 5
+    //最大分支
+    val maxBins  = 32
+
+    //模型训练
+    val model = DecisionTree.trainClassifier(trainningData,numClasses, categoricalFeaturesInfo, impurity, maxDepth, maxBins)
+
+    //模型预测
+    val labelAndPreds = testData.map{point=>
+      val prediction = model.predict(point.features)
+      (point.label,prediction)
+    }
+
+    //测试值与真实值对比
+    val print_predict = labelAndPreds.take(15)
+    println("label"+"\t"+"prediction")
+    for (i <- print_predict.indices){
+      println(print_predict(i)._1 + "\t" + print_predict(i)._2)
+    }
+
+    //树的错误率
+    val testErr = labelAndPreds.filter(r => r._1 != r._2).count.toDouble/testData.count()
+    println("Test Error = "+testErr)
+    //打印树的判断值
+    println("Learned classification tree model:\n"+model.toDebugString)
+  }
+}
+```
+
+测试结果：
+
+```json
+label  prediction
+0.0  0.0
+1.0  1.0
+1.0  1.0
+1.0  1.0
+0.0  0.0
+Test Error = 0.0
+Learned classification tree model:
+```
+
+后续集群升级后，会增加测试数据量，训练出更加完备的模型。
+
+
+
+#### 主要参考论文
 
 《机器学习预测实验室地震》 提供了随机森林/决策树进行预测的思想。
 
-《两硬条件下冲击地压微震信号特征及前兆识别》 提供了可以采用 b值 和 能量 的特征进行计算。
+《两硬条件下冲击地压微震信号特征及前兆识别》 提供了可以采用 b值 和 能量 的特征计算前兆信号识别的思想。
 
- 《煤矿动力灾害监测系统设计与实现》——陈博强【辽宁大学】提供了相关计算公式
+ 《煤矿动力灾害监测系统设计与实现》——陈博强【辽宁大学】提供了计算公式
 
+**《Hbase架构中RPC客户端的通信性能优化》——谭良 提供了HBase写入优化的建议**
 
+《Machine Learning in Apache Spark Environment for Diagnosis of Diabetes》
+
+《Large scale data analysis using MLlib》
+
+《微震信号识别与地压灾害微震前兆的研究》
+
+《基于Spark和随机森林优化的糖尿病预测_杨雨含》
+
+《基于实时测震数据的可视化系统的设计与实现》
+
+《Ensemble_Pruning_of_RF_via_Multi-Objective_TLBO_Algorithm_and_Its_Parallelization_on_Spark》
+
+《Evaluation of Static Vulnerability Detection Tools》
+
+《Kafka-ML:ConnectingthedatastreamwithML⁄AIframeworks》
 
 ### 优化过程 ###
 
 #### HBase存储速度优化
 
-批量存储即 putList 形式的优化方式会导致每一秒的数据的时间戳一致，这样就达不到  Versions 存储特性的使用。
+批量存储即 putList 形式的优化方式会**导致每一秒的数据的时间戳一致，这样就达不到  Versions 存储特性的使用**。
 
 ![](/data/files/杂项/研究生阶段/后台程序运行截图/存储模块/插入5000行控制台信息.png)
 
 一次性插入5000条数据集群扛不住，经过多番测试以目前的配置，最快的状况是每次批量插入100条数据。
-
-
 
 目前优化的思路有两个：
 1.参考论文：《HBase架构中RPC客户端的通信性能优化》，将客户端改为基于RPC的非阻塞式通信。
 
 2.参考博客：https://cloud.tencent.com/developer/article/1382924
 
-大致思路是进行多线程并行插入。
 
 
+参考论文关键点：
+
+- 采用Java语言中最新的 NIO 机制实现 客户端《--》服务端 之间的非阻塞通信。
+- 多线程并发执行。加入**线程池**可以有效的管理和调度工作中的线程。
+
+##### JavaNIO + 多线程优化代码实现
+
+
+
+其他相关论文研究：
+
+![](/data/files/杂项/研究生阶段/论文/大数据论文/HBase存储优化研究/研究论文合集截图.png)
+
+- 《Facility Information Management on HBase:Large-Scale Storage for Time-Series Data》
+
+  面向物联网大数据基于HBase的数据管理。
+
+  在本文中，重点讨论了HBase在设施信息管理中的应用，特别是从传感器或设施（如HVAC（供暖、通风和空调）、灯光控制系统、环境监测器和电能表）**收集的时间序列数据**。针对在云平台上管理数千栋建筑，推出一个开发FIAPStoragePeta的项目——计划“用于设施信息访问协议（FIAP）的PB级存储”。本文介绍了FIAPStor agePeta的体系结构和设计，提出了一种基于HBase的设备信息管理方案。
+
+- 《Distributed Storage System for Electric Power Data Based on HBase》
+
+  基于一个电力大数据的系统，**通过调整HBase参数进行的性能优化**
+
+- 《Efficient Spatial Big Data Storage and Query in HBase》
+
+  主要**通过Hilbert Curve算法对空间坐标大数据的存储与查询方面的优化**。
+
+- 《Financial Big Data Hot and Cold Separation Scheme Based on HBase and Redis》基于HBase+Redis实现的金融大数据冷热数据区分模式。
+
+  核心思想就是将 **经常被查询的数据称为 hot data 存在Redis中 把查询频率较小的数据称为 cold data 存在HBase中**。这样设计能够提高查询效率。
+
+- 《面向时序大数据的数据库性能研究》
+
+  该文章对关系型数据库、本地NoSQL数据库以及云NoSQL数据库在燃气大数据的应用场景下进行了定量定型的实验分析。实验结果表明，相比于关系型数据库，NoSQL数据库更加适合存储时序大数据。然后**提出了对不同场景下的时序大数据的数据库选型建议**。
+
+- 《Data Cache Optimization Model Based on HBase and Redis》 
+
+  基于Redis和HBase存储图片数据的优化
+
+  这篇文章探讨了云存储高质量图片模型，提出了一种**基于HBase+Redis组合的缓存策略**。此外，该模型还改进了高性能缓存技术的缺陷，设置了存储在Hbase中的索引，实现了**索引与数据节点的映射**。
+
+  
+
+##### Netty+【多线程+线程池】+Redis缓存队列+HBase多Versions设计
+
+1. *（Redis缓存机制）***在读取过程中**，模拟类似于操作系统中**“进程调度”**的思想（先来先服务/高响应比优先/最短作业优先/时间片轮转/最高优先级等）可以保证将**请求次数尽量的减小**，如果客户端请求的数据我此时的缓存里刚好存在，那么客户端就不用麻烦再去服务端请求这么一大圈弯路，直接返回请求的数据即可，而且我们的海量数据十分适合这样的机制，因为存储的各个字段都是带有时间戳的。**在本文中的读取部分主要是依照时间顺序的**，且读取的数据是为了接下来决策树指标计算做准备的，所以设计的机制就是在计算引擎正在计算时间段1的时候，开一个线程将时间段2的数据放在缓存中，这样可以使计算线程和读取线程始终保持在工作的状态，通俗的讲就是让他们都有活干，谁也别闲着。假如不这样设计的话 整个读取到计算的模块就是同步的，计算模块会一直等待读取模块拿来新的数据，而读取模块也会在给计算模块读完其所需要的数据之后陷入等待状态，效率极低。
+
+2. *（Redis缓存机制）***在存储过程中**，可能会有这样的疑问，为什么要在这之间加入一个缓存队列？直接存进去不才是最快的。我一开始也有这样的疑问，后来成功说服了自己，按前者的说法有一个非常严重的bug，在如此巨量的数据的情况下，很难保证存储过程是可靠的，为了**增加存储整体过程的稳定性**，需要把这些待存的数据在路上就放进一个缓存队列里，**而且一定是 P2P 的**，**此时客户端是生产者，服务端是消费者**，生产者不断地向缓存队列中加入数据，消费者不断地接收队列中的数据，**稳定性就在于**一旦服务器挂掉了即存不进去数据了比如向上图的情况，缓存队列里依然保存着未被消费掉的数据，等到服务端恢复了，服务端就会自动去获取，继续一个一个的处理。速度上的降低也是基于已被优化的情况。而且由于设置的**缓存队列本质上就是内存**，对速度的影响是比较小的。
+
+3. **HBase多Versions存储机制**：
+
+   ![](/data/files/杂项/研究生阶段/后台程序运行截图/计算模块/前兆信息HBase标记.png)
+
+   上图中粉色区域我们定义为一个分析计算时间段，分析时间段中包含若干时间戳，由于传感器平均一秒钟会产生5000条数据，且属于同一个历史时间戳，在该数据表设计模式下，一个历史时间戳就是一个HBase RowKey，那么这个问题就转换为在一个RowKey下存储多个Versions版本的数据，这也是HBase相较于其他传统数据库的优势之一，就是可以在一行中可以存储多条数据。具体分解图如下图所示：
+
+   ![](/data/files/杂项/研究生阶段/后台程序运行截图/HBase存储优化部分/Hbase同一时间戳多versions结构.png)
+
+   严格意义上，这种数据形式属于一种**极为特殊的时序数据**，因为参考的大多有关HBase存储/查询时序数据的文章中，他们的实验数据是**单位时间内一条数据的**，而我们的数据是**单位时间5000条**，这是一种前所未有的数据形式。但是这种数据事实上又是常见的比如物联网传感器频率很高的设备是很多的。所以以此为根据设计了以上形式的HBase数据存储模型。
+
+   
+
+   但是HBase的多Versions存储机制有一点很鸡肋，因为versions的插入需要时间戳的不同才能判定是两个不同的version数据，如果使用List<Put>批量插入的模式，这5000条versions数据会在同一个时间戳内被插入，最终显示的只能是最后被插入的那个versions数据。所以单纯的仅仅优化成批量put操作还是行不通，这种存储方式适用于插入一秒一条的数据即一个rowkey对应一条versions数据。
+
+   
+
+   为了解决这个问题。该算法模型加入了**自定义时间戳的设计**，这种设计模式在实际的业务场景下极为特殊才会使用，因为随着数据的增多，自定义时间戳会达到最大值，一旦达到最大值将会导致无法插入数据的风险。但是根据调查，如果从当前时间戳开始插入的话，实际上是不需要太担心的。因为时间戳TimeStamp在各类语言中都是Long类型的，而long的最大值为 922 3372 0368 5477 5807。而我们要搭建的离线数据仓库一秒钟是5000条数据，那么一天是 1800万 条，一个月最多是 5.5亿条，一年最多是70亿。
+
+    
+
+   新的问题：线程暂停的最小时间单位。Thread.sleep(1) 还能不能更小了
+
+   
+
+   存储算法模型代码如下所示：
+
+   ```java
+   public static void putRowsData(){
+           try {
+               //与HBase数据表建立连接
+               Table table = connection.getTable(TableName.valueOf("test1"));
+               //指定插入rowkey
+               String rowKey = "rowkey2";
+               List<Put> putList = new ArrayList<>();
+               Put put = new Put(Bytes.toBytes(rowKey));
+               for (int i=0;i<5;i++){
+                  put.addColumn(Bytes.toBytes("fam1"),
+                            Bytes.toBytes("name"),
+                            //通过每一条插入的时间戳区分非同一个Verions
+                            System.currentTimeMillis(),
+                            Bytes.toBytes("branch"+i));
+                   putList.add(put);
+                   //关键部分 线程睡眠一毫秒，否则就会出现versions数据覆盖问题
+                   Thread.sleep(1);
+               }
+               table.put(putList);
+               table.close();
+               System.out.println("批量插入成功");
+           } catch (IOException | InterruptedException e) {
+               e.printStackTrace();
+           }
+       }
+   ```
+
+4. **JavaAIO完全非阻塞异步存储技术：**
+
+   即Asynchronous IO：异步非阻塞编程方式。
+   
+   与NIO不同，当进行操作时读写操作时，只需直接调用API的read/write方法即可。且这两种方法均是异步的，对于读操作而言，当有流可读时，操作系统会将可读的流传入read方法的缓冲区，并通知Application。对于写操作来说，当操作系统将write方法传递的流写入完毕时，OS主动通知Application。所以在AIO的操作下，读写均是异步的且完成后会主动调用回调函数。AIO主要在 java.nio.channels包下，增加了如下四个异步通道。
+   
+   - AsynchronousSocketChannel
+   - AsynchronousServerSocketChannel 
+   - AsynchronousFileChannel
+   - AsynchronousDatagramChannel 
+   
+   同时加入多线程+线程池的思想，设置 n 个核心线程，n代表用几个文件参与计算，假设 n==6; 此时就可以通过这六个线程异步地向HBase存储数据。这部分将会与传统的NIO BIO通信方式做对比实验
+
+
+
+
+
+以上的优化都是针对客户端的，主要问题在于 经过JMeter性能极限测试，客户端是可以向服务端发送巨大数据的，服务端却无法处理这些数据，导致整个存储过程拥塞。
+
+**服务端优化**非常简单，加大内存、提高带宽、增加集群服务器CPU数量、调整参数等硬件因素即可实现速度的飞跃。
 

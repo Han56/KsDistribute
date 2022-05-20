@@ -25,7 +25,7 @@ public class FlowBean implements Writable {
     * 七步骤：提供无参构造方法
     * */
     public FlowBean(){
-
+        super();
     }
 
     /*
