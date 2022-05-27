@@ -140,11 +140,12 @@ public class NettyHttpProxyServer {
 
         //写入数据
         private void put(ChannelHandlerContext ctx,FullHttpRequest request){
-            System.out.println("正在存储");
+            //System.out.println("正在存储");
             Params params = parse(request);
             byte[] value = new byte[request.content().readableBytes()];
             request.content().readBytes(value);
             addListener(
+                    //判断是否含有重复数据，如果有则跳过
                     connection.getTable(TableName.valueOf(params.table)).put(new Put(Bytes.toBytes(params.row))
                             .addColumn(Bytes.toBytes(params.family),Bytes.toBytes(params.qualifier),value)),
                     (res,error)->{
@@ -159,7 +160,7 @@ public class NettyHttpProxyServer {
                         }
                     }
             );
-            System.out.println("存储完毕");
+            //System.out.println("存储完毕");
         }
 
         @Override

@@ -15,6 +15,7 @@ import read.utils.DateUtils;
 import read.utils.ReadFileThread;
 
 import java.io.*;
+import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.text.ParseException;
@@ -31,10 +32,16 @@ import java.util.concurrent.TimeUnit;
  */
 public class ReadLocalFile{
 
+    //HDFS定义
     private static FileSystem fileSystem;
 
-    @Before
-    public void init() throws URISyntaxException,IOException,InterruptedException{
+
+    public static volatile int count = 0;
+
+    /*
+    * HBase初始化
+    * */
+    public static void init() throws URISyntaxException,IOException,InterruptedException{
         // 连接集群 nn 地址
         URI uri = new URI("hdfs://hadoop101:8020");
         //创建一个配置文件
@@ -47,17 +54,22 @@ public class ReadLocalFile{
         fileSystem = FileSystem.get(uri,configuration,user);
     }
 
-    @After
-    public void close() throws IOException{
+    /*
+    * HBase关闭操作
+    * */
+    public static void close() throws IOException{
         fileSystem.close();
     }
 
-    @Test
-    public void readLocal() throws IOException, ParseException, InterruptedException {
+    /*
+    * 设置全部参数集合
+    * */
+    public static List<List<String>> setThreadParams() throws IOException, ParseException, InterruptedException, URISyntaxException {
 
         /*
          * 读取对齐分组文件中一行数据，分割空格将其塞进Map<Integer,List<String>>容器中
          * */
+        init();
         BufferedReader reader = new BufferedReader(new InputStreamReader
                 (fileSystem.open(new Path("hdfs://hadoop101:8020/hy_history_data/algin_group/6AlgrithmAlginRes.txt")))
         );
@@ -73,34 +85,39 @@ public class ReadLocalFile{
         }
         reader.close();
 
-        for (int i=1;i <= 1;i++){
+        List<List<String>> res = new ArrayList<>();
+
+        for (int i=1;i <= map.size() ;i++){
             List<String> filesPath;
             filesPath = map.get(i);
             DateUtils dateUtils = new DateUtils();
             List<String> startAndEndTime = dateUtils.getStartAndEndTime(filesPath);
             String winStart = startAndEndTime.get(0);String winEnd = startAndEndTime.get(1);
 
-            List<ReadFileThread> readFileThreads = new ArrayList<>();
-            //改为异步读取
+
             for (String oneFile:filesPath){
+                List<String> threadParams = new ArrayList<>();
                 //获取列名
                 String qualify = oneFile.substring(0,1);
                 /*
                 * 文件前缀，完整路径
                 * */
-                String prePathStr = "/data/files/DownLoads/KsDisIn/";
-                String totalFileStr = prePathStr+oneFile;
-                //将以上参数 通过Runnable构造函数进行初始化
+                String prePathStr = "I:\\红阳三矿\\201909\\";
+                String totalFileStr = prePathStr+oneFile.replace('/','\\');
+                threadParams.add(qualify);
+                threadParams.add(totalFileStr);
+                threadParams.add(winStart);
+                threadParams.add(winEnd);
+                res.add(threadParams);
             }
-            //线程工作初始化完成 开启线程池
-//            for (ReadFileThread readFileThread:readFileThreads){
-//                Thread thread = new Thread(readFileThread);
-//                thread.start();
-//            }
-
         }
+        close();
+        return res;
     }
 
+    /*
+    * HBase配置部分
+    * */
     public static Configuration configuration;
     public static Connection connection;
     static {
@@ -114,46 +131,36 @@ public class ReadLocalFile{
         }
     }
 
-    public static void main(String[] args) throws IOException {
-        //定义日志
-        //Logger logger = LoggerFactory.getLogger(ReadLocalFile.class);
-        Table table = connection.getTable(TableName.valueOf("dq"));
-        ReadFileThread readFileThread1 = new ReadFileThread("/data/files/DownLoads/KsDisIn/S/Test_190925110520.HFMED",
-                "S","2019-09-25 11:05:20","2019-09-25 11:09:49",table);
-        ReadFileThread readFileThread2 = new ReadFileThread("/data/files/DownLoads/KsDisIn/U/Test_190925105915.HFMED",
-                "U","2019-09-25 11:05:20","2019-09-25 11:09:49",table);
-        ReadFileThread readFileThread3 = new ReadFileThread("/data/files/DownLoads/KsDisIn/Y/Test_190925101650.HFMED",
-                "Y","2019-09-25 11:05:20","2019-09-25 11:09:49",table);
-        ReadFileThread readFileThread4 = new ReadFileThread("/data/files/DownLoads/KsDisIn/Z/Test_190925103745.HFMED",
-                "Z","2019-09-25 11:05:20","2019-09-25 11:09:49",table);
-        ReadFileThread readFileThread5 = new ReadFileThread("/data/files/DownLoads/KsDisIn/V/Test_190925100949.HFMED",
-                "V","2019-09-25 11:05:20","2019-09-25 11:09:49",table);
-        ReadFileThread readFileThread6 = new ReadFileThread("/data/files/DownLoads/KsDisIn/T/Test_190925104506.HFMED",
-                "T","2019-09-25 11:05:20","2019-09-25 11:09:49",table);
-
-        //Thread thread1 = new Thread(readFileThread1);
-//        Thread thread2 = new Thread(readFileThread2);
-//        thread1.start();
-//        thread2.start();
+    public static void main(String[] args) throws IOException, ParseException, InterruptedException, URISyntaxException {
+        Table table = connection.getTable(TableName.valueOf("dqq"));
+        //定义线程池
         ThreadPoolExecutor threadPoolExecutor = new ThreadPoolExecutor(
-                6,20,60*3, TimeUnit.SECONDS,
-                new LinkedBlockingQueue<>(100), Executors.defaultThreadFactory(),
+                10,20,60*3, TimeUnit.SECONDS,
+                new LinkedBlockingQueue<>(50), Executors.defaultThreadFactory(),
                 new ThreadPoolExecutor.AbortPolicy()
         );
-        System.out.println("Thread Pool is Created Successfully!");
-        threadPoolExecutor.execute(readFileThread1);
-        System.out.println("Thread1-start-S");
-        threadPoolExecutor.execute(readFileThread2);
-        System.out.println("Thread2-start-U");
-        threadPoolExecutor.execute(readFileThread3);
-        System.out.println("Thread3-start-Y");
-        threadPoolExecutor.execute(readFileThread4);
-        System.out.println("Thread4-start-Z");
-        threadPoolExecutor.execute(readFileThread5);
-        System.out.println("Thread5-start-V");
-        threadPoolExecutor.execute(readFileThread6);
-        System.out.println("Thread6-start-T");
+        Object lock = new Object();
 
+        //获取参数
+        List<List<String>> threadPoolParams = setThreadParams();
+
+        //设置连接对象 List<String> list:threadPoolParams
+        for(int i=0;i<threadPoolParams.size();i++){
+            ReadFileThread readFileThread1 = new ReadFileThread(threadPoolParams.get(i).get(1),
+                    threadPoolParams.get(i).get(0),threadPoolParams.get(i).get(2),threadPoolParams.get(i).get(3),table,lock,threadPoolExecutor);
+            //System.out.println("Thread Pool is Created Successfully!");
+            threadPoolExecutor.execute(readFileThread1);
+            System.out.println("Thread-start-"+threadPoolParams.get(i).get(0));
+            synchronized (lock){
+                count++;
+            }
+            if(count == 10){
+                System.out.println("当前核心线程数已满，暂停循环");
+                synchronized (lock){
+                    lock.wait();
+                }
+            }
+        }
         table.close();
 
     }

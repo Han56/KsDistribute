@@ -8,6 +8,7 @@ import org.apache.hadoop.hbase.client.Table;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import read.Parameters;
+import read.history.ReadLocalFile;
 import read.history.oldVersionCode.ReadDateFromHead;
 import read.history.oldVersionCode.ReadHfmedHead;
 import read.history.oldVersionCode.ReadSensorProperties;
@@ -23,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.ThreadPoolExecutor;
 
 /**
  * @author han56
@@ -72,13 +74,28 @@ public class ReadFileThread implements Runnable{
     private int bufferPoolSize = 10 * (Parameters.FREQUENCY + 200) * 10;
 
     private Table table;
+
+    //定义锁
+    private final Object lock;
+
+    //定义线程结束标志
+    private  boolean stopped = true;
+
+    private ThreadPoolExecutor threadPoolExecutor;
+
     //设置构造函数初始化
-    public ReadFileThread(String totalFilePath, String qualify, String winStart, String winEnd, Table table){
+    public ReadFileThread(String totalFilePath, String qualify, String winStart, String winEnd, Table table,Object lock,ThreadPoolExecutor threadPoolExecutor) throws InterruptedException {
         this.totalFilePath = totalFilePath;
         this.qualify = qualify;
         this.winEnd = winEnd;
         this.winStart = winStart;
         this.table = table;
+        this.lock = lock;
+        this.threadPoolExecutor = threadPoolExecutor;
+        System.out.println("count:  "+ReadLocalFile.count);
+        int activeCount = threadPoolExecutor.getActiveCount();
+        System.out.println("当前活跃线程数："+activeCount);
+        Thread.sleep(8000);
     }
 
     //开启一个读二进制任务
@@ -97,34 +114,42 @@ public class ReadFileThread implements Runnable{
 
             //HBaseApi hBaseApi = new HBaseApi();
             DateUtils dateUtils = new DateUtils();
-            while (true){
+            while (stopped){
                 List<DataElement> dataElementList = readLocalDataOffLine();
                 String dataInnerTime = dataElementList.get(0).getDataCalendar();
-                if (!dateUtils.segTimeCompareToWinStartTime(dataInnerTime,winStart))
+                if (!dateUtils.segTimeCompareToWinStartTime(dataInnerTime,winStart)){
+                    //System.out.println("["+qualify+"]"+" 正在寻找开始位置");
                     continue;
+                }
+                //此时时间戳 已经大于规定时间 将当前线程关闭 线程池 线程总数减少 并通知主线程 增加新的子线程
                 if (dateUtils.segTimeCompareToWinEndTime(dataInnerTime,winEnd)){
                     System.out.println("read over,end timestamp:"+dataInnerTime);
-                    break;
+                    //判断当前 count 是否小于6 如果小于则 执行同步代码块 解锁
+                    synchronized (lock){
+                        System.out.println("已发出继续循环通知");
+                        ReadLocalFile.count--;
+                        lock.notify();
+                        Thread.sleep(3000);
+                    }
+                    stopped = false;
+                    System.out.println("结束当前线程");
                 }
                 if (dateUtils.segTimeCompareToWinStartTime(dataInnerTime,winStart)){
-                    System.out.println("rowkey:"+dataElementList.get(0).getDataCalendar()+"qualify:"+qualify+"total data size:"+dataElementList.size());
+                    System.out.println("rowkey:"+dataElementList.get(0).getDataCalendar()+" qualify:"+qualify+" total data size:"+dataElementList.size());
                     long currentTime = System.currentTimeMillis();
                     //旧版本阻塞存储方法
                     //hBaseApi.addOneSecondRowData(qualify,dataElementList,table);
                     //新版本Netty非阻塞存储方法  将数据封装成put格式的url进行请求
                     String rowKey = dataElementList.get(0).getDataCalendar();
-                    for(DataElement dataElement:dataElementList){
-                        //封装存储url
-                        String data = dataElement.toString();
-                        String httpPut = httpPut("http://localhost:45889/dq/" + rowKey + "/" + "info:" + qualify, data, "UTF-8");
-                        //System.out.println(httpPut);
-                    }
+                    String datalist = dataElementList.toString();
+                    String httpPut = httpPut("http://localhost:45889/dqq/" + rowKey + "/" + "info:" + qualify, datalist, "UTF-8");
                     long endTime = System.currentTimeMillis();
                     long cost = endTime - currentTime;
                     System.out.println(qualify+" one second data saved,and spend time:"+cost);
                 }
             }
-        } catch (IOException | ParseException e) {
+            threadPoolExecutor.remove(this);
+        } catch (IOException | ParseException | InterruptedException e) {
             e.printStackTrace();
         }
     }
@@ -141,6 +166,7 @@ public class ReadFileThread implements Runnable{
             httpURLConnection.setDoOutput(true);
             httpURLConnection.setConnectTimeout(2000000);
             httpURLConnection.setReadTimeout(2000000);
+            httpURLConnection.setRequestProperty("Connection","close");
 
 
             httpURLConnection.setRequestMethod("PUT");
@@ -167,7 +193,6 @@ public class ReadFileThread implements Runnable{
         }catch (Exception e){
             e.printStackTrace();
         }finally {
-            url = null;
             if(httpURLConnection!=null)
                 httpURLConnection.disconnect();
         }
