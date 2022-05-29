@@ -145,7 +145,6 @@ public class NettyHttpProxyServer {
             byte[] value = new byte[request.content().readableBytes()];
             request.content().readBytes(value);
             addListener(
-                    //判断是否含有重复数据，如果有则跳过
                     connection.getTable(TableName.valueOf(params.table)).put(new Put(Bytes.toBytes(params.row))
                             .addColumn(Bytes.toBytes(params.family),Bytes.toBytes(params.qualifier),value)),
                     (res,error)->{

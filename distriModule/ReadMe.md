@@ -1093,22 +1093,15 @@ Learned classification tree model:
        }
    ```
 
-4. **JavaAIO完全非阻塞异步存储技术：**
+   优化进程
 
-   即Asynchronous IO：异步非阻塞编程方式。
+   | 传统的HttpURLConnection                      | GET可沿用：基于连接池的HttpClient                   |
+   | -------------------------------------------- | --------------------------------------------------- |
+   | 每个连接都要创建新的实例，耗费资源           | 尝试采用连接池技术保活连接                          |
+   | 经实验发现，一开始耗时很小，后续耗时越来越高 | 更改为Http长连接达到连接复用的目的                  |
+   |                                              | 经实验发现在耗时方面确实比HttpURLConnection更加稳定 |
+
    
-   与NIO不同，当进行操作时读写操作时，只需直接调用API的read/write方法即可。且这两种方法均是异步的，对于读操作而言，当有流可读时，操作系统会将可读的流传入read方法的缓冲区，并通知Application。对于写操作来说，当操作系统将write方法传递的流写入完毕时，OS主动通知Application。所以在AIO的操作下，读写均是异步的且完成后会主动调用回调函数。AIO主要在 java.nio.channels包下，增加了如下四个异步通道。
-   
-   - AsynchronousSocketChannel
-   - AsynchronousServerSocketChannel 
-   - AsynchronousFileChannel
-   - AsynchronousDatagramChannel 
-   
-   同时加入多线程+线程池的思想，设置 n 个核心线程，n代表用几个文件参与计算，假设 n==6; 此时就可以通过这六个线程异步地向HBase存储数据。这部分将会与传统的NIO BIO通信方式做对比实验
-
-
-
-
 
 以上的优化都是针对客户端的，主要问题在于 经过JMeter性能极限测试，客户端是可以向服务端发送巨大数据的，服务端却无法处理这些数据，导致整个存储过程拥塞。
 

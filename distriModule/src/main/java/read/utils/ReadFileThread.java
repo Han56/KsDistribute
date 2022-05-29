@@ -5,6 +5,10 @@ import entity.DataElement;
 import entity.HFMEDHead;
 import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.hbase.client.Table;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpPut;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.CloseableHttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import read.Parameters;
@@ -12,6 +16,7 @@ import read.history.ReadLocalFile;
 import read.history.oldVersionCode.ReadDateFromHead;
 import read.history.oldVersionCode.ReadHfmedHead;
 import read.history.oldVersionCode.ReadSensorProperties;
+import service.HttpClientUtil;
 
 import java.io.*;
 import java.net.HttpURLConnection;
@@ -142,7 +147,14 @@ public class ReadFileThread implements Runnable{
                     //新版本Netty非阻塞存储方法  将数据封装成put格式的url进行请求
                     String rowKey = dataElementList.get(0).getDataCalendar();
                     String datalist = dataElementList.toString();
-                    String httpPut = httpPut("http://localhost:45889/dqq/" + rowKey + "/" + "info:" + qualify, datalist, "UTF-8");
+                    String url = "http://localhost:45889/dqq/"+rowKey+"/"+"info:"+qualify;
+                    //重复创建HttpURLCOnnection案例
+                    //String httpPut = httpPut("http://localhost:45889/dqq/" + rowKey + "/" + "info:" + qualify, datalist, "UTF-8");
+                    //【优化】连接池创建管理连接
+                    HttpPut newPut = new HttpPut(url);
+                    newPut.setEntity(new StringEntity(datalist));
+                    CloseableHttpClient httpClient = HttpClientUtil.getHttpClient(url);
+                    httpClient.execute(newPut);
                     long endTime = System.currentTimeMillis();
                     long cost = endTime - currentTime;
                     System.out.println(qualify+" one second data saved,and spend time:"+cost);

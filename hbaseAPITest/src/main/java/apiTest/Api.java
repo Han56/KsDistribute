@@ -9,8 +9,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 /**
  * @author han56
@@ -288,7 +286,7 @@ public class Api {
         Table table = connection.getTable(TableName.valueOf("dq"));
         Get get = new Get(Bytes.toBytes("2019-09-2511:05:20"));
         get.readAllVersions();
-        get.addColumn(Bytes.toBytes("info"),Bytes.toBytes("V"));
+        get.addColumn(Bytes.toBytes("info"),Bytes.toBytes("S"));
         Result result = table.get(get);
         int sum = 0;
         for (Cell cell: result.rawCells()){

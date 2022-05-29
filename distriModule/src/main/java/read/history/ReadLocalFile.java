@@ -15,7 +15,6 @@ import read.utils.DateUtils;
 import read.utils.ReadFileThread;
 
 import java.io.*;
-import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.text.ParseException;
@@ -38,9 +37,11 @@ public class ReadLocalFile{
 
     public static volatile int count = 0;
 
+    private static final Object lock = new Object();
+
     /*
-    * HBase初始化
-    * */
+     * HBase初始化
+     * */
     public static void init() throws URISyntaxException,IOException,InterruptedException{
         // 连接集群 nn 地址
         URI uri = new URI("hdfs://hadoop101:8020");
@@ -55,15 +56,15 @@ public class ReadLocalFile{
     }
 
     /*
-    * HBase关闭操作
-    * */
+     * HBase关闭操作
+     * */
     public static void close() throws IOException{
         fileSystem.close();
     }
 
     /*
-    * 设置全部参数集合
-    * */
+     * 设置全部参数集合
+     * */
     public static List<List<String>> setThreadParams() throws IOException, ParseException, InterruptedException, URISyntaxException {
 
         /*
@@ -100,8 +101,8 @@ public class ReadLocalFile{
                 //获取列名
                 String qualify = oneFile.substring(0,1);
                 /*
-                * 文件前缀，完整路径
-                * */
+                 * 文件前缀，完整路径
+                 * */
                 String prePathStr = "I:\\红阳三矿\\201909\\";
                 String totalFileStr = prePathStr+oneFile.replace('/','\\');
                 threadParams.add(qualify);
@@ -116,8 +117,8 @@ public class ReadLocalFile{
     }
 
     /*
-    * HBase配置部分
-    * */
+     * HBase配置部分
+     * */
     public static Configuration configuration;
     public static Connection connection;
     static {
@@ -139,7 +140,7 @@ public class ReadLocalFile{
                 new LinkedBlockingQueue<>(50), Executors.defaultThreadFactory(),
                 new ThreadPoolExecutor.AbortPolicy()
         );
-        Object lock = new Object();
+
 
         //获取参数
         List<List<String>> threadPoolParams = setThreadParams();
